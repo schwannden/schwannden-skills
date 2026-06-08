@@ -114,7 +114,7 @@ or external CLIs in their bodies; those are noted in the skill and degrade grace
 
 ## Skill catalog
 
-19 skills across 7 themes. Each theme maps to a Claude Code plugin (install line shown);
+20 skills across 7 themes. Each theme maps to a Claude Code plugin (install line shown);
 with the skills CLI, install any single skill with `--skill <name>`.
 
 ### 🎭 personas — `/plugin install personas@schwannden-skills`
@@ -159,12 +159,14 @@ with the skills CLI, install any single skill with `--skill <name>`.
 
 ### 🛠️ engineering — `/plugin install engineering@schwannden-skills`
 
-Portable, cross-agent counterparts of the `feature-dev` and `pr-review` command plugins —
-the same methodology, adapted to run in any agent. They don't reproduce the plugins'
-interactive confirmation gates exactly, since those rely on Claude-Code-only tooling.
+Process across the build lifecycle — design, build, review. The `developing-features`
+and `reviewing-code` skills are portable, cross-agent counterparts of the `feature-dev`
+and `pr-review` command plugins (they don't reproduce the plugins' interactive
+confirmation gates exactly, since those rely on Claude-Code-only tooling).
 
 | Skill | Description | Notes |
 |-------|-------------|-------|
+| [`system-design`](./skills/system-design) | Vendor-neutral design partner for distributed systems — four modes (Review, Rubber-duck, Autopilot, Interview), a nine-dimension rubric with an L5/L6 interview scorecard, and a 15-design reference library spanning the canonical archetypes; reasons in fundamentals over branded products | Original |
 | [`developing-features`](./skills/developing-features) | Building a non-trivial feature end-to-end — a multi-phase loop (explore → clarify → architect → implement → review) with parallel read-only subagents and structured decision gates; skips itself for typo/one-line/hotfix changes | Original |
 | [`reviewing-code`](./skills/reviewing-code) | Reviewing a diff across six lenses (logic bugs, silent failures, test coverage, type design, comment accuracy, simplification) with confidence filtering and adversarial verification so only high-signal findings surface | Original |
 

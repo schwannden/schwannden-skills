@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "schwannden's personal collection of shareable agent skills.",
-    "version": "0.7.0"
+    "version": "0.8.0"
   },
   "plugins": [
     {
@@ -88,12 +88,13 @@
     },
     {
       "name": "engineering",
-      "description": "Portable engineering process: a multi-phase feature-development loop and a multi-dimension code-review methodology — cross-agent SKILL.md equivalents of the feature-dev and pr-review command plugins.",
+      "description": "Portable engineering process across the build lifecycle: a vendor-neutral system-design partner (with a mock-interview mode and a 15-design reference library), a multi-phase feature-development loop, and a multi-dimension code-review methodology.",
       "source": "./",
       "strict": false,
       "category": "engineering",
-      "tags": ["feature-development", "code-review", "architecture", "subagents", "tdd", "workflow"],
+      "tags": ["system-design", "architecture", "feature-development", "code-review", "subagents", "tdd", "workflow", "interview-prep"],
       "skills": [
+        "./skills/system-design",
         "./skills/developing-features",
         "./skills/reviewing-code"
       ]

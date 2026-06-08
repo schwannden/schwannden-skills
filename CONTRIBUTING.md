@@ -29,6 +29,19 @@ separate, **Claude-Code-only** family under `plugins/<name>/`. They are not skil
 installable via `npx skills`; each has its own `source` in `marketplace.json`. See AGENTS.md
 § "Registering a command/agent plugin".
 
+## One-time setup
+
+Install the [`pre-commit`](https://pre-commit.com) hooks so linting, secret/PII
+scanning, the registration check, and commit-message linting run automatically:
+
+```bash
+uv tool install pre-commit   # or: pipx install pre-commit / brew install pre-commit
+pre-commit install
+```
+
+Commits must follow [Conventional Commits](https://www.conventionalcommits.org/)
+(e.g. `feat(skills): add monitoring-services skill`, `docs(readme): fix catalog`).
+
 ## Authoring a new skill
 
 1. Use the bundled [`writing-skills`](./skills/writing-skills) skill — it's the
@@ -53,6 +66,24 @@ cross-agent skills CLI. To add a skill to both:
 4. Bump `metadata.version` in `marketplace.json` per SemVer (MAJOR = removed/renamed
    skill or breaking change; MINOR = new skill; PATCH = fixes).
 5. Run the **pre-publish safety checklist** below.
+6. Run `python3 scripts/check-registration.py` — it must print `✓` before you commit.
+
+## Renaming or removing a skill
+
+The same four files move in lockstep for **every** skill change, not just new ones.
+The invariant: the `skills/<name>/` folders, the `./skills/<name>` entries in
+`marketplace.json`, and the README catalog rows must always match (same for
+`plugins/<name>/` ↔ its `source`). So when you **rename or delete** a skill:
+
+1. Rename/delete the `skills/<name>/` folder (and update the frontmatter `name:`
+   on a rename so it still matches the folder).
+2. Update/remove its `./skills/<name>` entry in the themed plugin's `skills` array.
+3. Update/remove its row in the [`README.md`](./README.md) catalog.
+4. `grep -rn "<old-name>" . --exclude-dir=.git` and fix any cross-references.
+5. Bump `metadata.version` — both rename and removal are **MAJOR** bumps.
+
+`python3 scripts/check-registration.py` verifies the whole invariant in one shot;
+see AGENTS.md § "Renaming or removing a skill" for the full procedure.
 
 ## Pre-publish safety checklist
 

@@ -266,4 +266,3 @@ Workflow:
 - `ac:rich-text-body` can contain any standard storage-format elements
 - Empty paragraphs (`<p/>` or `<p></p>`) are valid and render as blank lines
 ```
-

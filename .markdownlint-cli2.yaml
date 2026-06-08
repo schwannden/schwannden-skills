@@ -1,0 +1,41 @@
+# markdownlint-cli2 config — BASIC structural linting for SKILL.md and docs.
+#
+# Philosophy: catch real Markdown mistakes in new content; do NOT impose a house
+# style on the existing corpus. The rules disabled below are either pure cosmetics
+# (table-pipe spacing, bullet glyph, blank-line placement) that fight this repo's
+# established formatting, or rules that false-positive on technical content
+# (Python slices read as "reversed links", "or" pipes inside code-span table
+# cells). Everything not listed here stays ON to catch genuine regressions
+# (empty links, multiple H1s, spaces in emphasis/code, missing image alt text, …).
+config:
+  # --- prose style: skills wrap text and embed HTML freely ---
+  MD013: false   # line length
+  MD033: false   # inline HTML (e.g. <placeholder>)
+  MD041: false   # first line need not be a top-level heading
+  MD003: false   # heading style (allow setext and atx to coexist)
+
+  # --- table / list / heading cosmetics (this repo's house style) ---
+  MD060: false   # table column style (compact pipe spacing)
+  MD056: false   # table column count — false-positives on `<a | b | c>` option cells
+  MD004: false   # unordered-list bullet glyph (- vs +)
+  MD032: false   # blanks around lists
+  MD022: false   # blanks around headings
+  MD031: false   # blanks around fenced code
+  MD028: false   # blank line inside blockquote
+  MD036: false   # emphasis used as a heading
+  MD026: false   # trailing punctuation in headings
+  MD049: false   # emphasis style (_ vs *)
+  MD024:         # duplicate headings: allow when not siblings (repeated subsections)
+    siblings_only: true
+  MD029:         # ordered-list numbering style
+    style: ordered
+
+  # --- technical-content false positives ---
+  MD051: false   # link fragments — flags valid GitHub heading anchors as broken
+  MD011: false   # "reversed links" — matches Python slices like (url)[:7]
+  MD040: false   # fenced code without a language (ASCII diagrams, plain output)
+  MD034: false   # bare URLs (common in reference link dumps)
+  MD010: false   # hard tabs (appear inside embedded code samples)
+
+ignores:
+  - "skills/writing-skills/**"   # vendored (obra/superpowers) — never reformat

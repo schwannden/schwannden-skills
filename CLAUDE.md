@@ -43,13 +43,17 @@ the command orchestrates; an agent may only *suggest* a follow-up. Reference
 domain skills only as optional ("load any installed skill whose description
 matches"), never hard-code a private skill list.
 
-## Adding a skill touches four things in lockstep
+## Every skill change touches four things in lockstep
 
-Editing just the `SKILL.md` leaves the repo inconsistent. A new skill requires:
-`skills/<name>/SKILL.md` → an entry in the correct themed plugin's `skills`
-array in `marketplace.json` → a catalog row in `README.md` → a SemVer bump of
-`metadata.version` in `marketplace.json`. (See AGENTS.md for the full procedure
-and the command/agent-plugin equivalent.)
+Editing just the `SKILL.md` leaves the repo inconsistent. **Creating, renaming,
+OR deleting** a skill must keep all four in sync in the same commit:
+`skills/<name>/SKILL.md` (folder name == frontmatter `name`) ↔ an entry in the
+correct themed plugin's `skills` array in `marketplace.json` ↔ a catalog row in
+`README.md` ↔ a SemVer bump of `metadata.version`. A rename or removal is a
+**MAJOR** bump and also requires grepping out dangling cross-references to the
+old name. Verify with `python3 scripts/check-registration.py` before committing —
+it fails on any drift. (See AGENTS.md §§ "Registering a new skill" and "Renaming
+or removing a skill" for the full procedures and the plugin equivalent.)
 
 ## Frontmatter rules that are enforced
 
@@ -65,6 +69,7 @@ and the command/agent-plugin equivalent.)
 
 ```bash
 npx skills init <skill-name>          # scaffold a new SKILL.md
+python3 scripts/check-registration.py # verify skills/plugins ↔ marketplace.json ↔ README are in sync
 gitleaks protect --staged --verbose   # scan staged changes before committing
 gitleaks detect --verbose             # scan full history before first push
 ./skills/writing-skills/render-graphs.js <skill-dir>   # render skill flowcharts to SVG

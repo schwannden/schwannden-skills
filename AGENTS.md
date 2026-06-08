@@ -141,18 +141,32 @@ Verify, for every changed file (including scripts, configs, sample data, images)
       preserved in the skill folder and recorded in `NOTICE` (see below).
 - [ ] Ran a secret scanner over staged changes (see below).
 
-### Recommended scanner commands
+### Automated enforcement (pre-commit hooks)
+
+This checklist is wired into [`pre-commit`](https://pre-commit.com) so it runs on
+every commit instead of relying on memory. One-time setup:
 
 ```bash
-# Scan staged changes before committing (install gitleaks first)
-gitleaks protect --staged --verbose
-
-# Scan full history before the first push
-gitleaks detect --verbose
+uv tool install pre-commit   # or: pipx install pre-commit / brew install pre-commit
+pre-commit install           # installs the pre-commit + commit-msg hooks
 ```
 
-Enable **GitHub secret scanning + push protection** on the repo as a server-side
-backstop. Consider a `gitleaks` pre-commit hook so this never relies on memory.
+`.pre-commit-config.yaml` runs, on each commit: file hygiene (whitespace, EOF,
+JSON/YAML parse), `markdownlint-cli2`, **gitleaks** (secret scanning), a
+**PII guard** (`scripts/check-no-pii.sh` — corporate email, home paths,
+username), the **registration + frontmatter** check (`scripts/check-registration.py`),
+and **gitlint** (Conventional Commits on the message). The manual read pass above
+is still required — scanners miss free-form PII.
+
+Run everything on demand, or scan history before the first push:
+
+```bash
+pre-commit run --all-files       # run all hooks over the whole repo
+gitleaks detect --verbose        # scan full git history for secrets
+```
+
+Also enable **GitHub secret scanning + push protection** as a server-side
+backstop (local hooks can be bypassed with `--no-verify`).
 
 ---
 
@@ -174,8 +188,54 @@ and the README links).
 3. Add a row to the matching **theme section** of the catalog in `README.md`.
 4. Bump `metadata.version` in `marketplace.json` per SemVer (MINOR for a new skill).
 5. Run the pre-publish safety checklist above.
+6. Run `python3 scripts/check-registration.py` — it must print `✓` before you commit.
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the human-facing version of this.
+
+---
+
+## Renaming or removing a skill (the step everyone forgets)
+
+Creating a skill is only one third of the lifecycle. **Renaming or deleting one
+touches the SAME linkage files** — and skipping them leaves dangling references
+that ship publicly. Both operations are governed by one rule:
+
+> **The registration invariant:** the set of `skills/<name>/` folders, the
+> `./skills/<name>` entries across all themed plugins in `marketplace.json`, and
+> the catalog rows in `README.md` must be **identical**. Same for
+> `plugins/<name>/` ↔ each plugin's isolated `source`. Every create/rename/delete
+> must restore this invariant in the **same commit**.
+
+**To rename or move a skill** (e.g. `drf-expert` → `writing-drf-apis`), update
+all of these together:
+1. Rename the folder `skills/<old>/` → `skills/<new>/`.
+2. Update the frontmatter `name:` inside `SKILL.md` to match the new folder.
+3. Update its `./skills/<old>` entry in the themed plugin's `skills` array.
+4. Update its catalog row in `README.md`.
+5. Grep for cross-references and fix them: `grep -rn "<old>" . --exclude-dir=.git`
+   (other skills, READMEs, this file — anywhere the old name is mentioned/linked).
+6. Bump `metadata.version` — a rename is a **MAJOR** bump (install URLs change).
+
+**To remove a skill**, do the inverse:
+1. Delete the `skills/<name>/` folder.
+2. Remove its `./skills/<name>` entry from the themed plugin's `skills` array
+   (and delete the whole plugin entry if it was the last skill in that theme).
+3. Remove its catalog row from `README.md`.
+4. Grep for and remove dangling cross-references (step 5 above).
+5. Bump `metadata.version` — a removal is a **MAJOR** bump.
+
+The same procedure applies to command/agent plugins, substituting
+`plugins/<name>/` and its isolated `source` entry for the skill folder/`skills`
+array.
+
+**Verify before every commit** — the one command that catches all of the above:
+
+```bash
+python3 scripts/check-registration.py
+```
+
+It asserts the invariant (disk ↔ `marketplace.json` ↔ `README.md`, frontmatter
+`name` == folder, valid JSON) and exits non-zero with a report on any drift.
 
 ---
 
@@ -203,6 +263,7 @@ live under `plugins/<name>/`, not in the flat `skills/` directory.
    skills only as optional ("load any installed skill whose description matches"),
    never hard-code a private skill list, and don't reference an agent/command that
    isn't shipped here.
+6. Run `python3 scripts/check-registration.py` — it must print `✓` before you commit.
 
 ---
 
