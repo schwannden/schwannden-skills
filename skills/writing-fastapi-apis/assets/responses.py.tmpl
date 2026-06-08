@@ -1,0 +1,48 @@
+"""Envelope builders. EVERY HTTP response goes through one of these.
+
+Returning a raw dict from a handler bypasses the envelope and breaks
+the frontend's parser. The two call sites are:
+
+    return ok(data)
+    return err(app_error)   # only the exception handlers call this
+
+Endpoint code uses `ok` for success and `raise AppError(...)` for
+failure; the registered exception handler turns the raise into
+`err(...)`.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi.responses import JSONResponse
+
+from .errors import AppError
+from .request_context import current_request_id
+
+
+def ok(data: Any, *, status: int = 200) -> JSONResponse:
+    return JSONResponse(
+        status_code=status,
+        content={
+            "success": True,
+            "data": data,
+            "error": None,
+            "request_id": current_request_id(),
+        },
+    )
+
+
+def err(error: AppError) -> JSONResponse:
+    return JSONResponse(
+        status_code=error.http_status,
+        content={
+            "success": False,
+            "data": None,
+            "error": {
+                "code": error.code.value,
+                "message_key": error.message_key,
+                "params": error.params,
+            },
+            "request_id": current_request_id(),
+        },
+    )

@@ -1,0 +1,83 @@
+"""Tiny seed factories. USE THIS TEMPLATE: copy to
+tests/_helpers/factories.py and adapt the columns to your schema.
+
+These exist so tests don't carry hand-rolled INSERTs. When the schema
+changes, you fix one place and every test keeps working.
+
+Each factory takes the test's pinned `db_conn` and any overrides as kwargs,
+inserts a row, and returns the row id (or the row itself when the test will
+need other columns).
+
+The `note` / `item` / `appointment` resources below are illustrative — swap
+them for your own domain tables. The PATTERN (factory per table, keyword
+overrides, return the id) is the reusable part.
+"""
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+import asyncpg
+
+
+async def make_note(
+    db_conn: asyncpg.Connection,
+    *,
+    locale: str = "en-US",
+    user_agent: str = "pytest",
+) -> uuid.UUID:
+    return await db_conn.fetchval(
+        """
+        INSERT INTO notes (id, started_at, last_active_at, user_agent, locale)
+        VALUES (gen_random_uuid(), now(), now(), $1, $2)
+        RETURNING id
+        """,
+        user_agent,
+        locale,
+    )
+
+
+async def make_item(
+    db_conn: asyncpg.Connection,
+    *,
+    note_id: uuid.UUID,
+    role: str = "user",
+    content: str = "hello",
+    tool_calls: dict[str, Any] | None = None,
+    tool_results: dict[str, Any] | None = None,
+) -> uuid.UUID:
+    return await db_conn.fetchval(
+        """
+        INSERT INTO items (id, note_id, role, content, tool_calls, tool_results, created_at)
+        VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, now())
+        RETURNING id
+        """,
+        note_id,
+        role,
+        content,
+        tool_calls,
+        tool_results,
+    )
+
+
+async def make_appointment(
+    db_conn: asyncpg.Connection,
+    *,
+    note_id: uuid.UUID,
+    title: str = "Test Appointment",
+    contact: str = "test@example.com",
+    start_time: str = "2026-07-01T10:00:00Z",
+    note: str = "test appointment",
+) -> uuid.UUID:
+    return await db_conn.fetchval(
+        """
+        INSERT INTO appointments (id, note_id, title, contact, start_time, note, captured_at)
+        VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, now())
+        RETURNING id
+        """,
+        note_id,
+        title,
+        contact,
+        start_time,
+        note,
+    )

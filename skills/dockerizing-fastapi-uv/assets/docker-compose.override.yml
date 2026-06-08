@@ -1,0 +1,38 @@
+# Auto-merged with docker-compose.yml on `docker compose up`.
+# Switches api+web to their `dev` targets, mounts source for hot reload,
+# and overrides commands to run with --reload.
+
+services:
+  api:
+    build:
+      target: dev
+    volumes:
+      - ../apps/api/src:/app/src
+      - ../apps/api/tests:/app/tests
+    command:
+      - uv
+      - run
+      - uvicorn
+      - api.main:app
+      - --host=0.0.0.0
+      - --port=8000
+      - --reload
+      - --reload-dir=/app/src
+    environment:
+      LOG_LEVEL: debug
+
+  web:
+    build:
+      target: dev
+    volumes:
+      - ../apps/web:/app
+      # Anonymous volume preserves the in-image node_modules so the host bind mount
+      # can't overlay it with (possibly-empty or wrong-architecture) host modules.
+      - /app/node_modules
+    command: ["pnpm", "dev", "--host=0.0.0.0", "--port=5173"]
+    # !override REPLACES the base ports list. Without it, Compose merges
+    # 5173:80 (nginx, from base) and 5173:5173 (vite, from this file)
+    # and the container fails to start with a host-port collision.
+    # !override requires Compose v2.24+.
+    ports: !override
+      - "5173:5173"

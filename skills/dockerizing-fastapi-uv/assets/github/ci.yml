@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  api-test:
+    name: api / pytest in container
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build the `test` stage and load it into the local docker daemon.
+      - name: Build api test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/api.Dockerfile
+          target: test
+          load: true
+          tags: api:test
+          cache-from: type=gha,scope=api-test
+          cache-to: type=gha,mode=max,scope=api-test
+
+      # Image's CMD is `uv run pytest -v`.
+      - name: Run pytest
+        run: docker run --rm api:test
+
+  api-lint:
+    name: api / hadolint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: infra/api.Dockerfile
+          failure-threshold: error
+
+  # Optional — drop this job if your project is api-only.
+  web-build:
+    name: web / build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/web.Dockerfile
+          target: prod
+          push: false
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web

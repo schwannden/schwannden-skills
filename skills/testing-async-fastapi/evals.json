@@ -1,0 +1,131 @@
+{
+  "skill_name": "testing-async-fastapi",
+  "evals": [
+    {
+      "id": "integration-test-endpoint",
+      "name": "Write an integration test for a POST endpoint",
+      "prompt": "Write an integration test for a POST /appointments endpoint in our async FastAPI + Postgres app. It should seed a parent row, call the endpoint, and verify the row was persisted. Use our existing test fixtures and the transactional-rollback isolation.",
+      "expected_output": "An async test function that uses the `client` and `db_conn` fixtures, seeds via a factory, POSTs through the AsyncClient, asserts on the response envelope, and reads back the row via db_conn within the same transaction (no commit, no manual cleanup).",
+      "files": [],
+      "assertions": [
+        {
+          "check": "regex",
+          "pattern": "async def test_",
+          "description": "Test is written as an async def."
+        },
+        {
+          "check": "regex",
+          "pattern": "\\bclient\\b[\\s\\S]*\\bdb_conn\\b",
+          "description": "Uses the client and db_conn fixtures rather than rolling its own."
+        },
+        {
+          "check": "regex",
+          "pattern": "await\\s+client\\.(post|get|put|delete)",
+          "description": "Drives the endpoint through the async httpx client."
+        },
+        {
+          "check": "regex",
+          "pattern": "db_conn\\.(fetchrow|fetchval|fetch)\\s*\\(",
+          "description": "Reads back DB state via the pinned connection inside the same transaction."
+        },
+        {
+          "check": "regex_absent",
+          "pattern": "TestClient",
+          "description": "Does NOT use the legacy sync TestClient."
+        },
+        {
+          "check": "regex_absent",
+          "pattern": "(?i)(mock|patch|MagicMock)[\\s\\S]{0,40}(pool|conn|asyncpg|database|db)",
+          "description": "Does NOT mock the database."
+        },
+        {
+          "check": "regex_absent",
+          "pattern": "(?i)\\b(commit|TRUNCATE)\\b",
+          "description": "Relies on rollback isolation; no explicit commit or manual TRUNCATE."
+        }
+      ]
+    },
+    {
+      "id": "sse-streaming-test",
+      "name": "Test an SSE streaming endpoint including the terminal error event",
+      "prompt": "Write end-to-end tests for our /chat SSE streaming endpoint. Cover the happy path (token events ending in end) and the terminal error case where the stream emits event: error as the last event while the HTTP status stays 200. Fake the LLM; don't hit the network.",
+      "expected_output": "Async tests that program the fake LLM, open client.stream(...), parse events with the read_sse_events helper, assert the happy path ends with `end`, and assert the failure path's last event is `error` with status still 200.",
+      "files": [],
+      "assertions": [
+        {
+          "check": "regex",
+          "pattern": "client\\.stream\\(",
+          "description": "Opens a streaming request rather than reading .text."
+        },
+        {
+          "check": "regex",
+          "pattern": "read_sse_events",
+          "description": "Uses the read_sse_events helper instead of hand-rolling SSE parsing."
+        },
+        {
+          "check": "regex",
+          "pattern": "fake_llm|FakeLLM|expect_(text|tool_use)",
+          "description": "Programs the fake LLM at the boundary."
+        },
+        {
+          "check": "regex",
+          "pattern": "(?i)event\\b[\\s\\S]{0,40}error",
+          "description": "Asserts on the terminal error event."
+        },
+        {
+          "check": "regex",
+          "pattern": "status_code\\s*==\\s*200",
+          "description": "Confirms the SSE error case keeps HTTP 200."
+        },
+        {
+          "check": "regex_absent",
+          "pattern": "(?i)(respx|httpx_mock|vcr|requests_mock)",
+          "description": "Does NOT mock the LLM over HTTP."
+        }
+      ]
+    },
+    {
+      "id": "review-bad-test",
+      "name": "Review a test with three anti-patterns",
+      "prompt": "Review this test and tell me what's wrong with it:\n\n```python\nfrom fastapi.testclient import TestClient\nfrom unittest.mock import MagicMock, patch\nimport respx\nfrom api.main import app\n\nclient = TestClient(app)\n\n@respx.mock\ndef test_chat(monkeypatch):\n    respx.post('https://api.anthropic.com/v1/messages').respond(json={'content': [{'type': 'text', 'text': 'hi'}]})\n    fake_pool = MagicMock()\n    fake_pool.acquire.return_value.fetchrow.return_value = {'id': 1}\n    with patch('api.deps.get_pool', return_value=fake_pool):\n        resp = client.post('/chat', json={'message': 'hello'})\n    assert resp.status_code == 200\n```",
+      "expected_output": "A review that flags all three problems: (1) the legacy sync TestClient should be httpx.AsyncClient with ASGITransport; (2) the database is mocked with MagicMock instead of using a real test DB with transactional rollback; (3) the LLM is stubbed over HTTP with respx instead of faking the client at the dependency boundary. Should also note SSE responses must be consumed with the read_sse_events helper, not via resp.status_code alone.",
+      "files": [],
+      "assertions": [
+        {
+          "check": "regex",
+          "pattern": "(?i)TestClient",
+          "description": "Flags the legacy TestClient."
+        },
+        {
+          "check": "regex",
+          "pattern": "(?i)(ASGITransport|AsyncClient)",
+          "description": "Recommends httpx AsyncClient with ASGITransport."
+        },
+        {
+          "check": "regex",
+          "pattern": "(?i)(mock|magicmock)[\\s\\S]{0,60}(db|database|pool|connection)",
+          "description": "Flags mocking the database."
+        },
+        {
+          "check": "regex",
+          "pattern": "(?i)(transactional|rollback|real (test )?(db|database))",
+          "description": "Recommends a real test DB with transactional rollback instead."
+        },
+        {
+          "check": "regex",
+          "pattern": "(?i)(respx|over (the )?http|http(-| )?level|wire)",
+          "description": "Flags stubbing the LLM over HTTP."
+        },
+        {
+          "check": "regex",
+          "pattern": "(?i)(boundary|dependency override|dependency_overrides|fake.{0,10}(llm|client))",
+          "description": "Recommends faking the LLM at the SDK/dependency boundary."
+        },
+        {
+          "check": "custom",
+          "description": "Review identifies all three anti-patterns (legacy TestClient, DB mocking, HTTP-level LLM stubbing) as distinct problems and proposes the correct alternative for each."
+        }
+      ]
+    }
+  ]
+}

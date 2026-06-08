@@ -1,0 +1,61 @@
+# Place this file at the REPO ROOT (build context). The Dockerfiles live at infra/.
+
+# VCS
+.git
+.gitignore
+.gitattributes
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+**/.python-version
+**/dist/
+**/build/
+**/*.egg-info/
+
+# Node / Vite
+**/node_modules/
+**/.pnpm-store/
+**/.vite/
+**/.next/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Env & secrets — NEVER ship these
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local-only artifacts
+**/.coverage
+**/htmlcov/
+**/coverage.xml
+**/*.log
+
+# Docs and meta (not needed in image)
+docs/
+README.md
+CHANGELOG.md
+LICENSE
+.github/
+
+# Compose meta (not needed inside image)
+infra/docker-compose.yml
+infra/docker-compose.override.yml
+infra/.env
+infra/.env.*

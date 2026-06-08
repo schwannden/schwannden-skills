@@ -1,0 +1,30 @@
+# --- Secrets / sensitive (never commit) ---
+.env
+.env.*
+*.pem
+*.key
+*.p12
+id_rsa*
+*.credentials
+secrets.*
+.secrets/
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- Tooling / deps ---
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# --- Local agent / scratch ---
+.claude/settings.local.json
+scratch/
+tmp/

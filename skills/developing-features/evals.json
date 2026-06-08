@@ -1,0 +1,60 @@
+{
+  "skill_name": "developing-features",
+  "evals": [
+    {
+      "id": 0,
+      "name": "multi-file-feature-runs-phased-loop",
+      "prompt": "I want to add a 'saved searches' feature to our app: users can name and persist a search query, see a list of their saved searches, and re-run one with a click. It'll touch the API, the data layer, and the frontend. Help me build it.",
+      "expected_output": "The agent recognizes this as a non-trivial, multi-file feature and runs the phased loop. It opens a visible per-phase task tracker, dispatches 2-3 parallel read-only explorer subagents to understand existing search/persistence/UI patterns, then reads the files they surface. CRITICALLY, it asks structured multiple-choice clarifying questions (scope, storage, edge cases) BEFORE writing any implementation code, and waits for answers. It does not jump straight to coding.",
+      "files": [],
+      "assertions": [
+        {"id": "mentions_phases", "description": "Describes a multi-phase loop", "check": "regex", "pattern": "(?i)phase|discovery|exploration|clarif|architect"},
+        {"id": "parallel_explorers", "description": "Dispatches parallel exploration subagents", "check": "regex", "pattern": "(?i)parallel.*(agent|explor|subagent)|(agent|explor|subagent).*parallel"},
+        {"id": "clarify_before_code", "description": "Asks clarifying questions before implementation", "check": "regex", "pattern": "(?i)clarif|question|ambigu"},
+        {"id": "structured_choices", "description": "Uses structured multiple-choice questions, not prose", "check": "regex", "pattern": "(?i)multiple[- ]choice|structured question|2.4 (options|choices)|AskUserQuestion|options"},
+        {"id": "task_tracker", "description": "Maintains a visible task tracker", "check": "regex", "pattern": "(?i)task (tracker|list)|TaskCreate|track.*progress|one (item|task) per phase"},
+        {"id": "reads_surfaced_files", "description": "Reads the files the explorers surface", "check": "custom", "description_long": "The agent states it will read the key files identified by explorer subagents before designing."},
+        {"id": "no_premature_code", "description": "Does not begin implementation before clarification/architecture", "check": "custom", "description_long": "No implementation code is written before the clarify and architecture phases complete with user input."}
+      ]
+    },
+    {
+      "id": 1,
+      "name": "typo-hotfix-declines-heavy-loop",
+      "prompt": "There's a typo in the login page heading: it says 'Welome' instead of 'Welcome'. Fix it.",
+      "expected_output": "The agent recognizes this is a trivial single-line/typo change that falls under 'when NOT to fire'. It does NOT open a seven-phase task tracker, does NOT dispatch explorer/architect/reviewer subagents, and does NOT run a batch of clarifying questions. It just locates the string and fixes it directly, optionally noting that the heavy feature-development loop is unnecessary overhead here.",
+      "files": [],
+      "assertions": [
+        {"id": "declines_loop", "description": "Declines the multi-phase loop for a trivial change", "check": "regex", "pattern": "(?i)typo|one[- ]line|single[- ]line|trivial|directly|overhead|skip.*(loop|phase)|not need|no need"},
+        {"id": "no_parallel_agents", "description": "Does NOT dispatch parallel exploration/architecture subagents", "check": "regex_absent", "pattern": "(?i)dispatch.*(2.3|three|parallel).*(explor|architect)|fan out.*(explor|architect)"},
+        {"id": "no_seven_phases", "description": "Does NOT spin up the full seven-phase tracker", "check": "regex_absent", "pattern": "(?i)phase 7|seven[- ]phase|Phase 1 .* Phase 2 .* Phase 3"},
+        {"id": "works_directly", "description": "Proceeds to fix directly", "check": "custom", "description_long": "The agent fixes the typo directly rather than running discovery/exploration/clarify phases."}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "design-system-presents-multiple-options",
+      "prompt": "Design the notifications system for our product: in-app, email, and eventually push. I want to see the options before we commit to anything.",
+      "expected_output": "The agent treats this as a scope/design request and runs the loop with emphasis on exploration and architecture. After exploring and asking structured clarifying questions, it dispatches 2-3 parallel architect subagents with DIFFERENT framings (minimal-change / clean / pragmatic), then presents the distinct approaches with trade-offs and a recommendation, and asks the user to choose one via a structured question before any implementation. It does not pick an architecture unilaterally.",
+      "files": [],
+      "assertions": [
+        {"id": "multiple_architectures", "description": "Presents 2-3 distinct architecture options", "check": "regex", "pattern": "(?i)minimal[- ]change|clean|pragmatic|2.3 (architect|approach|option)|different (framing|approach)|trade[- ]?off"},
+        {"id": "parallel_architects", "description": "Dispatches parallel architect subagents", "check": "regex", "pattern": "(?i)(architect|subagent).*(parallel)|parallel.*(architect)|fan out.*architect"},
+        {"id": "user_chooses", "description": "Asks the user to choose an approach", "check": "regex", "pattern": "(?i)which (approach|option)|ask.*(choose|pick|prefer)|choose.*(with|user)|structured question|AskUserQuestion"},
+        {"id": "clarify_present", "description": "Still runs clarifying questions before designing", "check": "regex", "pattern": "(?i)clarif|question|ambigu|underspecif"},
+        {"id": "no_unilateral_choice", "description": "Does not commit to one architecture without the user", "check": "custom", "description_long": "The agent presents options and waits for the user to select rather than picking and implementing on its own."}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "scrubbing-guard-no-private-references",
+      "prompt": "Walk me through how this feature-development workflow handles a multi-file feature, end to end.",
+      "expected_output": "A description of the seven-phase loop using only generic, portable terminology. No references to any private project, internal codename, project-specific slash command, or hardcoded sub-agent name appear.",
+      "files": [],
+      "assertions": [
+        {"id": "no_private_names", "description": "No private project names, codenames, or project-specific command/paths leak", "check": "regex_absent", "pattern": "(?i)acme-internal|widget-bot|secret-codename|/private-command"},
+        {"id": "generic_dispatch", "description": "Describes dispatch generically", "check": "regex", "pattern": "(?i)subagent|parallel|read-only|explor"},
+        {"id": "delegates_review", "description": "Delegates review dimensions to reviewing-code", "check": "regex", "pattern": "(?i)reviewing-code|review.*dimension|delegate"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "skill_name": "transcribing-media",
+  "evals": [
+    {
+      "id": 0,
+      "name": "youtube-manual-sub-subtitle-first",
+      "prompt": "I want to read this YouTube talk: https://www.youtube.com/watch?v=dQw4w9WgXcQ . The video has human-authored English subtitles. Get me the transcript as plain text. What's the fastest, most accurate way and what exact command should I run?",
+      "expected_output": "Recommends the subtitle-first approach: probe with yt-dlp --list-subs for a MANUAL subtitle, and since one exists, extract it with scripts/yt_subs_to_txt.py (near-instant, near-zero error) rather than downloading audio and running an ASR pipeline. Should NOT recommend transcribing the audio when a manual subtitle is available, and should distinguish manual subtitles from auto-captions.",
+      "files": [],
+      "assertions": [
+        {"id": "uses_yt_subs_script", "description": "Recommends the yt_subs_to_txt.py subtitle extractor", "check": "regex", "pattern": "yt_subs_to_txt\\.py"},
+        {"id": "probes_subs", "description": "Probes with yt-dlp --list-subs", "check": "regex", "pattern": "yt-dlp\\s+--list-subs|--list-subs"},
+        {"id": "subtitle_first_principle", "description": "Invokes the subtitle-first principle", "check": "regex", "pattern": "(?i)subtitle[- ]first|manual subtitle|near-?zero error|beats? .*audio"},
+        {"id": "distinguishes_auto_captions", "description": "Distinguishes manual subs from auto-captions", "check": "regex", "pattern": "(?i)auto[- ]?caption|automatic caption"},
+        {"id": "no_premature_asr", "description": "Does not jump straight to an audio ASR pipeline", "check": "regex_absent", "pattern": "(?i)download the audio.*(parakeet|whisper) (immediately|first|right away)"},
+        {"id": "no_private_terms", "description": "No scrubbed private terms leak", "check": "regex_absent", "pattern": "(?i)PrivateAuthor|secret-term|私人作者|secret-hardware"}
+      ]
+    },
+    {
+      "id": 1,
+      "name": "mandarin-local-qwen3-opencc",
+      "prompt": "I have a local Mandarin Chinese lecture recording at ~/audio/lecture01.m4a. It's literary, with idioms and several proper nouns (names of people and organizations), and occasional English words mixed in. I want an accurate Traditional Chinese transcript. Which engine and exact flags should I use?",
+      "expected_output": "Recommends mlx-qwen3-asr with the Qwen3-ASR-1.7B model (NOT 0.6B, which mangles idioms), --language Chinese to force language ID across code-switching, --context with a glossary of the proper nouns as the highest-leverage flag, and a post-process with opencc -c s2twp.json for Simplified->Traditional. Must explicitly warn AGAINST enabling speculative --draft-model decoding.",
+      "files": [],
+      "assertions": [
+        {"id": "uses_qwen3", "description": "Recommends mlx-qwen3-asr / Qwen3-ASR", "check": "regex", "pattern": "(?i)mlx-qwen3-asr|Qwen3-ASR"},
+        {"id": "model_1_7b", "description": "Uses the 1.7B model", "check": "regex", "pattern": "1\\.7B"},
+        {"id": "language_chinese", "description": "Passes --language Chinese", "check": "regex", "pattern": "--language\\s+Chinese"},
+        {"id": "context_flag", "description": "Uses --context for proper nouns", "check": "regex", "pattern": "--context"},
+        {"id": "opencc_s2twp", "description": "Post-processes with opencc s2twp", "check": "regex", "pattern": "opencc.*s2twp|s2twp\\.json"},
+        {"id": "no_draft_model", "description": "Warns against speculative --draft-model decoding", "check": "regex", "pattern": "(?i)(no|not|don'?t|avoid|disable).{0,40}draft-model|draft-model.{0,40}(regress|not|avoid|disable)"},
+        {"id": "draft_flag_absent_in_command", "description": "The recommended command does not enable --draft-model", "check": "custom", "description_long": "Any command block recommended for running should not contain an enabled --draft-model flag."},
+        {"id": "no_private_terms", "description": "No scrubbed private terms leak", "check": "regex_absent", "pattern": "(?i)PrivateAuthor|secret-term|私人作者|secret-hardware"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "english-local-apple-silicon-parakeet-v2-trap",
+      "prompt": "I'm on an Apple Silicon MacBook and have a local English lecture recording at ~/audio/talk.mp3. I want the most accurate English transcript. Which engine should I use and what's the exact command? Are there any gotchas?",
+      "expected_output": "Recommends parakeet-mlx on Apple Silicon, and CRITICALLY flags that the CLI default model is v3 (multilingual) which is worse on English than v2, so the command must pass --model mlx-community/parakeet-tdt-0.6b-v2 explicitly. May offer mlx-whisper large-v3-turbo as the proper-noun-friendly alternative, with a warning that a long initial_prompt can cause hallucination loops.",
+      "files": [],
+      "assertions": [
+        {"id": "uses_parakeet", "description": "Recommends parakeet-mlx (or mlx-whisper alternative)", "check": "regex", "pattern": "(?i)parakeet-mlx|mlx-whisper"},
+        {"id": "explicit_v2_model", "description": "Passes the explicit v2 model", "check": "regex", "pattern": "parakeet-tdt-0\\.6b-v2"},
+        {"id": "flags_v3_default_trap", "description": "Flags the v3 default trap", "check": "regex", "pattern": "(?i)default.{0,40}v3|v3.{0,40}(default|multilingual|worse)"},
+        {"id": "mentions_alternative", "description": "Mentions mlx-whisper turbo alternative or initial_prompt caveat", "check": "regex", "pattern": "(?i)large-v3-turbo|initial_prompt|hallucinat"},
+        {"id": "no_private_terms", "description": "No scrubbed private terms leak", "check": "regex_absent", "pattern": "(?i)PrivateAuthor|secret-term|私人作者|secret-hardware"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "which-engine-for-my-machine-routing",
+      "prompt": "I have a folder of audio files to transcribe locally and I'm not sure which whisper engine is right for my hardware. How do I figure out the best engine for my machine, and how do I run a resumable batch that won't redo work if it gets interrupted?",
+      "expected_output": "Directs the user to run scripts/detect_backend.py to detect OS/arch/GPU and get the recommended engine (mlx-whisper on Apple Silicon, faster-whisper cuda on NVIDIA, faster-whisper cpu/int8 otherwise), and to use scripts/transcribe_batch.py with --engine auto for a resumable batch that skips already-transcribed files and writes a ledger. Should reference running via uv.",
+      "files": [],
+      "assertions": [
+        {"id": "uses_detect_backend", "description": "Recommends detect_backend.py", "check": "regex", "pattern": "detect_backend\\.py"},
+        {"id": "uses_batch_driver", "description": "Recommends the resumable batch driver", "check": "regex", "pattern": "transcribe_batch\\.py"},
+        {"id": "auto_engine", "description": "Uses --engine auto or mentions auto-detection", "check": "regex", "pattern": "(?i)--engine\\s+auto|auto[- ]?detect"},
+        {"id": "resumable", "description": "Mentions resumability / skip-if-exists", "check": "regex", "pattern": "(?i)resumable|skip.{0,20}exist|already.{0,20}transcrib"},
+        {"id": "mentions_matrix", "description": "Mentions the platform->engine choices", "check": "regex", "pattern": "(?i)mlx-whisper|faster-whisper|Apple Silicon|CUDA|NVIDIA"},
+        {"id": "runs_via_uv", "description": "Runs scripts via uv", "check": "regex", "pattern": "(?i)uv run|uvx"},
+        {"id": "no_private_terms", "description": "No scrubbed private terms leak", "check": "regex_absent", "pattern": "(?i)PrivateAuthor|secret-term|私人作者|secret-hardware"}
+      ]
+    }
+  ]
+}

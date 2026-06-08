@@ -1,0 +1,132 @@
+"""FakeLLM — stub the LLM SDK at the boundary. USE THIS TEMPLATE: copy to
+tests/_helpers/fake_llm.py.
+
+The concrete shape here mirrors the Anthropic SDK (`messages.stream(...)`
+returning an async context manager that yields events). Substitute the
+surface your own provider client exposes — the boundary-fake pattern is
+identical.
+
+Tests program the next response with a small builder DSL, then call the
+application as usual. The fake exposes the same surface the production code
+uses so the loop under test doesn't notice it's a fake.
+
+This file is small on purpose — extend it as the real loop's surface grows.
+See references/llm-mocking.md for full patterns including server-tool
+blocks, citations, and pause_turn.
+"""
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class _Plan:
+    """One programmed response. The fake plays one Plan per
+    `messages.stream(...)` call, in the order they were queued."""
+    text_chunks: list[str] = field(default_factory=list)
+    tool_use: dict[str, Any] | None = None  # {"name": "...", "input": {...}, "id": "..."}
+    stop_reason: str = "end_turn"  # or "tool_use", "pause_turn", "max_tokens"
+
+
+class FakeLLM:
+    """A stand-in for the async LLM client that records calls and replays
+    programmed responses. Pin it via `app.dependency_overrides[
+    get_llm_client]` (the conftest does this for you)."""
+
+    def __init__(self) -> None:
+        self._plans: list[_Plan] = []
+        self.calls: list[dict[str, Any]] = []  # what the loop sent us
+        self.messages = _Messages(self)
+
+    # --- programming the fake -----------------------------------------
+
+    def expect_text(self, text: str, *, chunk_size: int = 8) -> "FakeLLM":
+        chunks = [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)] or [""]
+        self._plans.append(_Plan(text_chunks=chunks, stop_reason="end_turn"))
+        return self
+
+    def expect_tool_use(
+        self,
+        name: str,
+        *,
+        input: dict[str, Any],
+        tool_use_id: str = "toolu_test_1",
+        leading_text: str = "",
+    ) -> "FakeLLM":
+        text_chunks = [leading_text] if leading_text else []
+        self._plans.append(
+            _Plan(
+                text_chunks=text_chunks,
+                tool_use={"id": tool_use_id, "name": name, "input": input},
+                stop_reason="tool_use",
+            )
+        )
+        return self
+
+    def expect_pause_turn(self, *, partial_text: str = "") -> "FakeLLM":
+        chunks = [partial_text] if partial_text else []
+        self._plans.append(_Plan(text_chunks=chunks, stop_reason="pause_turn"))
+        return self
+
+    # --- internals -----------------------------------------------------
+
+    def _next_plan(self) -> _Plan:
+        if not self._plans:
+            raise AssertionError(
+                "FakeLLM has no programmed plans left — "
+                "call expect_text / expect_tool_use before the request"
+            )
+        return self._plans.pop(0)
+
+
+class _Messages:
+    def __init__(self, fake: FakeLLM) -> None:
+        self._fake = fake
+
+    def stream(self, **kwargs: Any) -> "_StreamCtx":
+        # Record what the loop sent us. Tests assert on this to verify
+        # the system prompt, tool list, cache_control placement, etc.
+        self._fake.calls.append(kwargs)
+        return _StreamCtx(self._fake._next_plan())
+
+    async def create(self, **kwargs: Any) -> dict[str, Any]:
+        # For the rare non-streaming call. Returns a plain dict matching
+        # the SDK's response shape — fill in more fields if your code
+        # needs them.
+        self._fake.calls.append(kwargs)
+        plan = self._fake._next_plan()
+        content: list[dict[str, Any]] = []
+        if any(plan.text_chunks):
+            content.append({"type": "text", "text": "".join(plan.text_chunks)})
+        if plan.tool_use:
+            content.append({"type": "tool_use", **plan.tool_use})
+        return {"content": content, "stop_reason": plan.stop_reason}
+
+
+class _StreamCtx:
+    def __init__(self, plan: _Plan) -> None:
+        self._plan = plan
+
+    async def __aenter__(self) -> "_StreamCtx":
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        return None
+
+    @property
+    def text_stream(self) -> AsyncIterator[str]:
+        return self._iter_text()
+
+    async def _iter_text(self) -> AsyncIterator[str]:
+        for chunk in self._plan.text_chunks:
+            yield chunk
+
+    async def get_final_message(self) -> dict[str, Any]:
+        content: list[dict[str, Any]] = []
+        if any(self._plan.text_chunks):
+            content.append({"type": "text", "text": "".join(self._plan.text_chunks)})
+        if self._plan.tool_use:
+            content.append({"type": "tool_use", **self._plan.tool_use})
+        return {"content": content, "stop_reason": self._plan.stop_reason}

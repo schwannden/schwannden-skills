@@ -1,0 +1,44 @@
+"""Locale catalogue.
+
+The frontend is the source of truth for displayed strings — the wire
+response is locale-agnostic (just code + message_key + params). This
+module exists so that:
+
+  * server-side LOGS can render a default English message,
+  * non-browser clients (curl, ops scripts, internal tools) can call
+    `render(...)` to format an error for human consumption,
+  * we keep the locale tables version-controlled alongside the codes
+    so adding an error force-reminds the author to translate it.
+
+Calling code:
+
+    from .i18n import render
+    msg = render("errors.form.stale",
+                 {"age_hours": 30},
+                 locale="en")
+"""
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+import yaml
+
+
+@lru_cache(maxsize=1)
+def _catalog() -> dict[str, dict[str, str]]:
+    base = Path(__file__).parent / "locales"
+    return {
+        loc.stem: yaml.safe_load(loc.read_text(encoding="utf-8")) or {}
+        for loc in sorted(base.glob("*.yaml"))
+    }
+
+
+def render(message_key: str, params: dict[str, object], *, locale: str = "en") -> str:
+    catalog = _catalog()
+    table = catalog.get(locale) or catalog.get("en") or {}
+    template = table.get(message_key, message_key)
+    try:
+        return template.format(**params)
+    except (KeyError, IndexError):
+        return template

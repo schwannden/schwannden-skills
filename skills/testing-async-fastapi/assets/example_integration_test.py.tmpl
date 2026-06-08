@@ -1,0 +1,80 @@
+"""Example integration test — real DB, real FastAPI app, fake LLM.
+USE THIS TEMPLATE: copy to tests/integration/test_health.py.
+
+Integration tests live in tests/integration/. They use the `client` fixture
+(an httpx AsyncClient bound to the app) and `db_conn` (the test's pinned
+connection inside a rolled-back transaction). The LLM is auto-faked.
+
+The pattern is:
+  1. Seed via factories.
+  2. Hit an endpoint via `client`.
+  3. Assert on the envelope and on DB state via `db_conn`.
+"""
+from __future__ import annotations
+
+import asyncpg
+from httpx import AsyncClient
+
+from tests._helpers.factories import make_note
+
+
+async def test_health_endpoint_returns_ok_envelope(client: AsyncClient) -> None:
+    response = await client.get("/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"] == {"status": "ok"}
+    assert body["error"] is None
+
+
+async def test_appointment_endpoint_persists_row(
+    client: AsyncClient,
+    db_conn: asyncpg.Connection,
+) -> None:
+    note_id = await make_note(db_conn)
+
+    response = await client.post(
+        "/appointments",
+        json={
+            "note_id": str(note_id),
+            "title": "Intro call",
+            "contact": "alice@example.com",
+            "start_time": "2026-07-01T10:00:00Z",
+            "note": "Tell me more about the schedule",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["success"] is True
+    assert "id" in body["data"]
+
+    # The app's writes are visible to the test because both share the
+    # same pinned connection inside one transaction.
+    row = await db_conn.fetchrow(
+        "SELECT title, contact, start_time FROM appointments WHERE note_id = $1",
+        note_id,
+    )
+    assert row is not None
+    assert row["title"] == "Intro call"
+
+
+async def test_appointment_endpoint_rejects_unknown_note(client: AsyncClient) -> None:
+    response = await client.post(
+        "/appointments",
+        json={
+            "note_id": "00000000-0000-0000-0000-000000000000",
+            "title": "x",
+            "contact": "bob@example.com",
+            "start_time": "2026-07-01T10:00:00Z",
+            "note": "hi",
+        },
+    )
+
+    assert response.status_code == 404
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "NOTE.NOT_FOUND"
+    # PII discipline: the contact value MUST NOT appear in the error.
+    assert "bob@example.com" not in response.text

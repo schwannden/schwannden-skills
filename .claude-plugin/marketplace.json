@@ -1,0 +1,118 @@
+{
+  "name": "schwannden-skills",
+  "owner": {
+    "name": "schwannden",
+    "email": "schwannden@gmail.com"
+  },
+  "metadata": {
+    "description": "schwannden's personal collection of shareable agent skills.",
+    "version": "0.7.0"
+  },
+  "plugins": [
+    {
+      "name": "personas",
+      "description": "Writing and coaching personas: technical-writing voice, reflective/spiritual essays, and a leadership coach.",
+      "source": "./",
+      "strict": false,
+      "category": "writing",
+      "tags": ["persona", "writing", "blogging", "leadership"],
+      "skills": [
+        "./skills/persona-technical-writing",
+        "./skills/persona-spiritual",
+        "./skills/persona-leadership"
+      ]
+    },
+    {
+      "name": "fastapi-backend",
+      "description": "Python/FastAPI backend craft: response envelopes, async tests, Docker, and Django REST Framework.",
+      "source": "./",
+      "strict": false,
+      "category": "backend",
+      "tags": ["fastapi", "python", "drf", "docker", "testing", "api"],
+      "skills": [
+        "./skills/writing-fastapi-apis",
+        "./skills/testing-async-fastapi",
+        "./skills/dockerizing-fastapi-uv",
+        "./skills/writing-drf-apis"
+      ]
+    },
+    {
+      "name": "ai-engineering",
+      "description": "AI/LLM engineering: thin agent loops on the Anthropic SDK, disciplined local-model benchmarking, and local media transcription.",
+      "source": "./",
+      "strict": false,
+      "category": "ai",
+      "tags": ["llm", "anthropic", "agents", "ml", "transcription", "local-inference"],
+      "skills": [
+        "./skills/building-llm-agent-loops",
+        "./skills/comparing-model-variants",
+        "./skills/transcribing-media"
+      ]
+    },
+    {
+      "name": "operations",
+      "description": "Service operations: tool-agnostic health monitoring and end-to-end incident triage, both self-evolving templates.",
+      "source": "./",
+      "strict": false,
+      "category": "operations",
+      "tags": ["monitoring", "incidents", "sre", "observability", "triage"],
+      "skills": [
+        "./skills/monitoring-services",
+        "./skills/triaging-incidents"
+      ]
+    },
+    {
+      "name": "dev-workflow",
+      "description": "Engineering workflow: PR walkthroughs, batch dependency-upgrade risk scans, and Jira/Confluence REST recipes.",
+      "source": "./",
+      "strict": false,
+      "category": "workflow",
+      "tags": ["pull-request", "code-review", "dependencies", "jira", "confluence"],
+      "skills": [
+        "./skills/explain-pr",
+        "./skills/dependency-upgrade-scanner",
+        "./skills/recipe-atlassian"
+      ]
+    },
+    {
+      "name": "authoring",
+      "description": "Meta-skills for authoring: test-driven skill writing and high-quality AGENTS.md files.",
+      "source": "./",
+      "strict": false,
+      "category": "meta",
+      "tags": ["skills", "authoring", "agents-md", "documentation"],
+      "skills": [
+        "./skills/writing-skills",
+        "./skills/agents-md"
+      ]
+    },
+    {
+      "name": "engineering",
+      "description": "Portable engineering process: a multi-phase feature-development loop and a multi-dimension code-review methodology — cross-agent SKILL.md equivalents of the feature-dev and pr-review command plugins.",
+      "source": "./",
+      "strict": false,
+      "category": "engineering",
+      "tags": ["feature-development", "code-review", "architecture", "subagents", "tdd", "workflow"],
+      "skills": [
+        "./skills/developing-features",
+        "./skills/reviewing-code"
+      ]
+    },
+    {
+      "name": "feature-dev",
+      "description": "Guided, gated feature development: a /feature-dev command that explores the codebase, asks clarifying questions, designs candidate architectures, implements, then auto-reviews — backed by code-explorer and code-architect subagents.",
+      "source": "./plugins/feature-dev",
+      "strict": false,
+      "category": "workflow",
+      "tags": ["feature-development", "command", "subagents", "architecture", "workflow"]
+    },
+    {
+      "name": "pr-review",
+      "description": "Comprehensive multi-agent PR review: a /review-pr command that inspects the diff, selects applicable specialist subagents (code quality, tests, docs, error handling, type design, simplification), runs them in parallel, and aggregates findings by severity.",
+      "source": "./plugins/pr-review",
+      "strict": false,
+      "category": "workflow",
+      "tags": ["pull-request", "code-review", "command", "subagents", "workflow"]
+    }
+  ]
+}

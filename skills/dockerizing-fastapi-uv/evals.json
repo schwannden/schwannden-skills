@@ -1,0 +1,92 @@
+{
+  "skill_name": "dockerizing-fastapi-uv",
+  "evals": [
+    {
+      "id": 0,
+      "name": "api-dockerfile-multi-target",
+      "prompt": "Create `infra/api.Dockerfile` for a FastAPI service at `apps/api/`. Stack: Python 3.12, uv as the package manager (apps/api/pyproject.toml + apps/api/uv.lock), asyncpg. The build context will be the repo root (not infra/). I need this Dockerfile to support: (a) hot reload during local dev, (b) running pytest in-container for CI, (c) production deployment as a non-root user with proper signal handling and a PORT that the platform injects. Write the complete file to infra/api.Dockerfile.",
+      "expected_output": "A multi-target Dockerfile (named stages: builder, test, dev, prod) using BuildKit cache mounts for uv, layered with deps before code, non-root user with explicit UID in prod, healthcheck, exec-form CMD with PORT env var support, slim-bookworm (not alpine), uv installed via the upstream image (not curl|sh).",
+      "files": [],
+      "assertions": [
+        {"id": "syntax_pragma", "description": "Has BuildKit syntax pragma", "check": "regex", "pattern": "^#\\s*syntax=docker/dockerfile:1"},
+        {"id": "multi_stage_prod", "description": "Has named 'prod' target", "check": "regex", "pattern": "AS\\s+prod"},
+        {"id": "multi_stage_dev", "description": "Has named 'dev' target", "check": "regex", "pattern": "AS\\s+dev"},
+        {"id": "multi_stage_test", "description": "Has named 'test' target for pytest", "check": "regex", "pattern": "AS\\s+test"},
+        {"id": "buildkit_cache_mount", "description": "Uses BuildKit cache mount for uv", "check": "regex", "pattern": "--mount=type=cache.*uv"},
+        {"id": "non_root_user", "description": "Uses non-root user in prod", "check": "regex", "pattern": "USER\\s+(?!root)"},
+        {"id": "explicit_uid", "description": "Creates user with explicit UID", "check": "regex", "pattern": "useradd.*--uid"},
+        {"id": "port_env_var", "description": "Respects PORT env var (platform requirement)", "check": "regex", "pattern": "\\$\\{?PORT"},
+        {"id": "host_zero", "description": "Binds to 0.0.0.0, not localhost", "check": "regex", "pattern": "0\\.0\\.0\\.0"},
+        {"id": "exec_form_cmd", "description": "Uses exec form CMD (JSON array)", "check": "regex", "pattern": "^CMD\\s+\\["},
+        {"id": "healthcheck", "description": "Has HEALTHCHECK directive", "check": "regex", "pattern": "HEALTHCHECK"},
+        {"id": "slim_not_alpine", "description": "Uses slim base, not alpine", "check": "regex", "pattern": "python:.*slim"},
+        {"id": "no_curl_install_uv", "description": "Does NOT install uv via curl|sh", "check": "regex_absent", "pattern": "curl.*astral.*sh.*\\|\\s*sh"},
+        {"id": "layer_order_deps_first", "description": "Copies pyproject/uv.lock before src", "check": "custom", "description_long": "The line copying pyproject.toml/uv.lock should appear before the line copying src/"}
+      ]
+    },
+    {
+      "id": 1,
+      "name": "compose-with-healthcheck-deps",
+      "prompt": "Write `infra/docker-compose.yml` plus a `infra/docker-compose.override.yml`. Three services: db (postgres:16 with init.sql mounted at /docker-entrypoint-initdb.d/init.sql, persistent volume), api (built from infra/api.Dockerfile, build context = repo root, target=prod by default but switched to dev in the override), and web (built from infra/web.Dockerfile, similar target switch). The api must NOT start until db is ready (use a real healthcheck condition, not just service_started). In dev mode (override) both api and web should hot-reload — bind-mount source from apps/api/src and apps/web. The api needs ANTHROPIC_API_KEY from a .env file or shell — fail clearly if it's missing.",
+      "expected_output": "Two compose files. Base: db with pg_isready healthcheck, api with depends_on db service_healthy + ANTHROPIC_API_KEY interpolated with :? guard, web. Override: target: dev for api+web, source bind-mounts, --reload for uvicorn, vite dev command for web, anonymous volume for /app/node_modules, port mapping override for vite (5173:5173 instead of 5173:80).",
+      "files": [],
+      "assertions": [
+        {"id": "two_files", "description": "Produces both base + override compose files", "check": "custom"},
+        {"id": "postgres_16", "description": "Uses postgres:16 image", "check": "regex", "pattern": "image:\\s*postgres:16"},
+        {"id": "init_sql_mount", "description": "Mounts init.sql at correct path", "check": "regex", "pattern": "init\\.sql:/docker-entrypoint-initdb\\.d/init\\.sql"},
+        {"id": "pg_healthcheck", "description": "DB has pg_isready healthcheck", "check": "regex", "pattern": "pg_isready"},
+        {"id": "service_healthy_dep", "description": "api depends on db service_healthy", "check": "regex", "pattern": "condition:\\s*service_healthy"},
+        {"id": "build_context_root", "description": "Build context is repo root (..)", "check": "regex", "pattern": "context:\\s*\\.\\."},
+        {"id": "dockerfile_path", "description": "Dockerfile path is infra/api.Dockerfile", "check": "regex", "pattern": "dockerfile:\\s*infra/api\\.Dockerfile"},
+        {"id": "target_prod_base", "description": "Base file uses target: prod", "check": "regex", "pattern": "target:\\s*prod"},
+        {"id": "target_dev_override", "description": "Override file uses target: dev", "check": "regex", "pattern": "target:\\s*dev"},
+        {"id": "anthropic_env_required", "description": "ANTHROPIC_API_KEY uses :? guard", "check": "regex", "pattern": "ANTHROPIC_API_KEY.*:\\?"},
+        {"id": "uvicorn_reload", "description": "Override runs uvicorn with --reload", "check": "regex", "pattern": "--reload"},
+        {"id": "node_modules_anon_vol", "description": "Anonymous volume preserves node_modules", "check": "regex", "pattern": "/app/node_modules"},
+        {"id": "no_obsolete_version", "description": "No obsolete 'version: 3.x' field", "check": "regex_absent", "pattern": "^version:\\s*['\\\"]?3"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "gha-deploy-cloud-run-wif",
+      "prompt": "Add a GitHub Actions workflow at `.github/workflows/deploy.yml` that, on push to main, builds the api image (from infra/api.Dockerfile, target=prod, platform linux/amd64), pushes it to **Google Artifact Registry**, and deploys to Google Cloud Run. Auth must use **Workload Identity Federation** — no JSON service account keys. The deploy step must wire `--add-cloudsql-instances` for a Cloud SQL Postgres instance and pull `ANTHROPIC_API_KEY` from Secret Manager via `--set-secrets`. Use BuildKit GHA cache for fast incremental builds. Tag with both the commit SHA and `latest`.",
+      "expected_output": "A GitHub Actions workflow with id-token: write permission, google-github-actions/auth@v2 using workload_identity_provider + service_account, setup-gcloud, configure-docker for Artifact Registry (REGION-docker.pkg.dev), docker/build-push-action@v6 with target=prod and cache-from/to: type=gha, then a gcloud run deploy step with --add-cloudsql-instances and --set-secrets ANTHROPIC_API_KEY=...:latest. SHA-tagged via metadata-action.",
+      "files": [],
+      "assertions": [
+        {"id": "id_token_write", "description": "Has id-token: write permission", "check": "regex", "pattern": "id-token:\\s*write"},
+        {"id": "wif_auth_action", "description": "Uses google-github-actions/auth", "check": "regex", "pattern": "google-github-actions/auth@v2"},
+        {"id": "wif_provider_param", "description": "Passes workload_identity_provider", "check": "regex", "pattern": "workload_identity_provider"},
+        {"id": "no_json_key", "description": "Does NOT use credentials_json or service-account JSON keys", "check": "regex_absent", "pattern": "credentials_json"},
+        {"id": "setup_gcloud", "description": "Uses setup-gcloud action", "check": "regex", "pattern": "google-github-actions/setup-gcloud"},
+        {"id": "artifact_registry_url", "description": "Targets Artifact Registry (-docker.pkg.dev)", "check": "regex", "pattern": "-docker\\.pkg\\.dev"},
+        {"id": "buildx", "description": "Uses docker/setup-buildx-action", "check": "regex", "pattern": "docker/setup-buildx-action"},
+        {"id": "build_push_action", "description": "Uses docker/build-push-action", "check": "regex", "pattern": "docker/build-push-action"},
+        {"id": "target_prod", "description": "Builds target: prod", "check": "regex", "pattern": "target:\\s*prod"},
+        {"id": "platform_amd64", "description": "Specifies linux/amd64 platform", "check": "regex", "pattern": "platforms?:.*linux/amd64"},
+        {"id": "gha_cache", "description": "Uses GHA cache backend", "check": "regex", "pattern": "type=gha"},
+        {"id": "cloud_sql_instances", "description": "Wires --add-cloudsql-instances", "check": "regex", "pattern": "--add-cloudsql-instances"},
+        {"id": "set_secrets_anthropic", "description": "Uses --set-secrets for ANTHROPIC_API_KEY", "check": "regex", "pattern": "--set-secrets.*ANTHROPIC_API_KEY"},
+        {"id": "sha_tag", "description": "Tags by commit SHA", "check": "regex", "pattern": "github\\.sha"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "cloud-run-readiness-review",
+      "prompt": "Review this Dockerfile for a FastAPI api and tell me everything that needs to change for it to deploy cleanly to a serverless container platform like Google Cloud Run. The project uses uv for dependency management. Be specific about each issue and explain why each change matters.\n\n```dockerfile\nFROM python:3.12\nCOPY . /app\nWORKDIR /app\nRUN pip install -r requirements.txt\nENV ANTHROPIC_API_KEY=sk-ant-REDACTED-example-do-not-leak\nEXPOSE 5000\nCMD python main.py\n```",
+      "expected_output": "A review identifying: single-stage (should be multi-stage), no slim/digest pin, COPY . . without .dockerignore, pip not uv (project uses uv), root user (no non-root user), ANTHROPIC_API_KEY baked into image (critical security issue — must use a secret store / --set-secrets at deploy time), wrong port (5000 vs PORT env var injection), shell-form CMD breaks SIGTERM, binds to localhost (not 0.0.0.0), no healthcheck, no BuildKit cache mounts. Each issue should explain WHY (platform constraint, security implication, performance).",
+      "files": [],
+      "assertions": [
+        {"id": "flags_secret_in_image", "description": "Flags baked-in ANTHROPIC_API_KEY as a security issue", "check": "regex", "pattern": "(?i)secret|leak|secret manager|--set-secrets|never bake"},
+        {"id": "flags_root_user", "description": "Flags missing non-root user", "check": "regex", "pattern": "(?i)non-root|root user|USER"},
+        {"id": "flags_port_env", "description": "Flags need to use PORT env var", "check": "regex", "pattern": "(?i)PORT.*env|inject.*PORT"},
+        {"id": "flags_localhost_bind", "description": "Flags need to bind 0.0.0.0", "check": "regex", "pattern": "(?i)0\\.0\\.0\\.0|localhost"},
+        {"id": "flags_signal_handling", "description": "Flags shell-form CMD / SIGTERM handling", "check": "regex", "pattern": "(?i)SIGTERM|signal|exec form|shell form"},
+        {"id": "flags_multi_stage", "description": "Recommends multi-stage build", "check": "regex", "pattern": "(?i)multi-stage|multistage|stages"},
+        {"id": "flags_uv_not_pip", "description": "Mentions project uses uv (not pip)", "check": "regex", "pattern": "(?i)\\buv\\b"},
+        {"id": "flags_healthcheck", "description": "Recommends adding HEALTHCHECK", "check": "regex", "pattern": "(?i)healthcheck|health check|/health"},
+        {"id": "flags_dockerignore", "description": "Recommends .dockerignore", "check": "regex", "pattern": "(?i)\\.dockerignore"},
+        {"id": "explains_why", "description": "Explains WHY each issue matters (platform constraint, security, etc.)", "check": "custom"}
+      ]
+    }
+  ]
+}

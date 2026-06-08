@@ -1,0 +1,9 @@
+{
+  "name": "feature-dev",
+  "description": "Guided, gated feature development: explore the codebase, ask clarifying questions, design candidate architectures, implement, then auto-review. Bundles the /feature-dev command with code-explorer and code-architect subagents.",
+  "version": "0.1.0",
+  "author": {
+    "name": "schwannden",
+    "email": "schwannden@gmail.com"
+  }
+}

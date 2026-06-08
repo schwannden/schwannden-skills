@@ -1,0 +1,61 @@
+{
+  "skill_name": "writing-fastapi-apis",
+  "evals": [
+    {
+      "id": "add-endpoint-envelope",
+      "name": "New endpoint returns through the envelope and raises AppError",
+      "prompt": "Add a GET /items/{item_id} endpoint to our FastAPI app. It looks up an item by id from the repo; if the item does not exist it should fail with a not-found error. Follow our API conventions.",
+      "expected_output": "A handler that returns through responses.ok(...) on success and raises AppError(ErrorCode.ITEM_NOT_FOUND, {\"resource\": \"item\"}) when missing — never HTTPException, never a raw dict.",
+      "files": [
+        "skills/writing-fastapi-apis/SKILL.md",
+        "skills/writing-fastapi-apis/references/adding-an-endpoint.md",
+        "skills/writing-fastapi-apis/assets/errors.py.tmpl",
+        "skills/writing-fastapi-apis/assets/responses.py.tmpl"
+      ],
+      "assertions": [
+        { "check": "regex", "pattern": "raise\\s+AppError\\s*\\(" },
+        { "check": "regex", "pattern": "ITEM_NOT_FOUND|ITEM\\.NOT_FOUND" },
+        { "check": "regex", "pattern": "\\bok\\s*\\(" },
+        { "check": "regex_absent", "pattern": "raise\\s+HTTPException" },
+        { "check": "regex_absent", "pattern": "\\+15555\\d+|@corp\\.example|acme-internal|widget-bot|secret-codename" }
+      ]
+    },
+    {
+      "id": "register-error-code",
+      "name": "Register a new error code across enum, status map, and both locales",
+      "prompt": "We need a new error for when an order has already been shipped and can no longer be cancelled. Register the error code ORDER.ALREADY_SHIPPED (HTTP 409) following our conventions, including all the places it has to be kept in sync.",
+      "expected_output": "An ErrorCode member ORDER_ALREADY_SHIPPED = \"ORDER.ALREADY_SHIPPED\", a 409 entry in _HTTP_STATUS, an errors.order.already_shipped key in BOTH en.yaml and zh-TW.yaml, and a catalog entry.",
+      "files": [
+        "skills/writing-fastapi-apis/SKILL.md",
+        "skills/writing-fastapi-apis/references/error-catalog.md",
+        "skills/writing-fastapi-apis/assets/errors.py.tmpl",
+        "skills/writing-fastapi-apis/assets/locales/en.yaml",
+        "skills/writing-fastapi-apis/assets/locales/zh-TW.yaml"
+      ],
+      "assertions": [
+        { "check": "regex", "pattern": "ORDER_ALREADY_SHIPPED\\s*=\\s*\"ORDER\\.ALREADY_SHIPPED\"" },
+        { "check": "regex", "pattern": "409" },
+        { "check": "regex", "pattern": "errors\\.order\\.already_shipped" },
+        { "check": "custom", "instruction": "Verify the new message_key errors.order.already_shipped is added to BOTH en.yaml AND zh-TW.yaml — the two locale tables must stay in sync." }
+      ]
+    },
+    {
+      "id": "review-pii-and-envelope-bypass",
+      "name": "Review a handler that leaks PII and bypasses the envelope",
+      "prompt": "Review this handler against our conventions:\n\n@app.post(\"/submit\")\nasync def submit(body: SubmitIn):\n    if not valid(body.email):\n        raise HTTPException(status_code=422, detail=f\"bad email: {body.email}\")\n    log.info(f\"submission from {body.email}: {body.message}\")\n    return {\"ok\": True, \"email\": body.email}",
+      "expected_output": "Flags: (1) raises HTTPException instead of AppError, bypassing the envelope; (2) returns a raw dict instead of responses.ok(...), bypassing the envelope; (3) PII leak — email value in the error detail and email+message in the f-string log line. Recommends raise AppError with field NAMES only in params, log via extra= without PII, and return ok(...).",
+      "files": [
+        "skills/writing-fastapi-apis/SKILL.md",
+        "skills/writing-fastapi-apis/references/pii-redaction.md",
+        "skills/writing-fastapi-apis/assets/handlers.py.tmpl"
+      ],
+      "assertions": [
+        { "check": "regex", "pattern": "(?i)HTTPException" },
+        { "check": "regex", "pattern": "(?i)AppError" },
+        { "check": "regex", "pattern": "(?i)envelope|responses\\.ok|raw dict" },
+        { "check": "regex", "pattern": "(?i)pii|leak|extra=|field name" },
+        { "check": "custom", "instruction": "Verify the review flags BOTH the envelope bypass (HTTPException + raw dict return) AND the PII leak (email value in error detail and email/message interpolated into the log f-string), and recommends params carry field NAMES not values." }
+      ]
+    }
+  ]
+}

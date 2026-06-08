@@ -1,0 +1,51 @@
+{
+  "skill_name": "comparing-model-variants",
+  "evals": [
+    {
+      "id": "disciplined-comparison-loop",
+      "name": "Which local model is best runs the disciplined loop",
+      "prompt": "Which local Whisper model gives the best transcription accuracy for my English podcast on this Mac? Help me figure it out.",
+      "expected_output": "The agent sets up the disciplined comparison: fix a small frozen eval input + a gold reference, pick ONE primary metric (e.g. WER), run the unmodified default as baseline FIRST, then change one knob per run, log every run to an append-only results.tsv, and quote warm-cache RTF rather than the cold first run. It does not eyeball quality or guess a winner.",
+      "files": [
+        "skills/comparing-model-variants/SKILL.md"
+      ],
+      "assertions": [
+        { "check": "regex", "pattern": "(?i)baseline" },
+        { "check": "regex", "pattern": "(?i)one (knob|thing|change)|one[- ]knob" },
+        { "check": "regex", "pattern": "(?i)results\\.tsv|append-only|ledger|log (every|each) run" },
+        { "check": "regex", "pattern": "(?i)wer|primary metric|fixed (eval|input)|gold" },
+        { "check": "custom", "instruction": "Verify the answer insists on a fixed eval set, a baseline run first, one knob per run, and a logged number — not subjective listening." }
+      ]
+    },
+    {
+      "id": "refuses-multi-knob-shortcut",
+      "name": "Refuses to change multiple knobs at once",
+      "prompt": "Just try a few different models and beam sizes all at once and tell me which combination is fastest. I don't want to wait around.",
+      "expected_output": "The agent declines to vary multiple knobs in one run because the delta couldn't be attributed. It insists on a baseline plus one-knob-per-run serialization, warns that cold-run timings include the model download so the committed number is the warm-cache run, and notes Apple-Silicon single-GPU saturation means parallel jobs just halve each other.",
+      "files": [
+        "skills/comparing-model-variants/SKILL.md"
+      ],
+      "assertions": [
+        { "check": "regex", "pattern": "(?i)one (knob|thing|change)|serial|attribut" },
+        { "check": "regex", "pattern": "(?i)cold[- ]run|warm[- ]?cache|download" },
+        { "check": "regex_absent", "pattern": "(?i)just change (them )?all at once|test everything together is fine" },
+        { "check": "custom", "instruction": "Verify the answer refuses to change more than one variable per run and explains why attribution breaks, rather than complying with the shortcut." }
+      ]
+    },
+    {
+      "id": "scope-guard-cloud-out-of-scope",
+      "name": "Declines cloud/API benchmarking as out of scope",
+      "prompt": "Help me benchmark GPT-4 vs Claude via their APIs to pick the cheapest one for my product.",
+      "expected_output": "The agent notes this skill is scoped to LOCAL models on LOCAL hardware and that API/cloud selection has a different cost model and different bottlenecks, so this method does not apply. It points the user elsewhere rather than forcing the local-hardware loop onto a cloud comparison.",
+      "files": [
+        "skills/comparing-model-variants/SKILL.md"
+      ],
+      "assertions": [
+        { "check": "regex", "pattern": "(?i)local" },
+        { "check": "regex", "pattern": "(?i)api|cloud" },
+        { "check": "regex", "pattern": "(?i)out of scope|does not apply|different (cost|bottleneck)|not (the right|for)" },
+        { "check": "regex_absent", "pattern": "acme-internal|widget-bot|secret-codename" }
+      ]
+    }
+  ]
+}

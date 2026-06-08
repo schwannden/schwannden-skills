@@ -1,0 +1,38 @@
+"""Per-request context — currently just the request id.
+
+The id is set once by middleware (preferring the inbound
+`x-request-id` header so log lines correlate across services), and
+the response builders (`responses.ok`, `responses.err`) read it from
+the ContextVar so handler signatures stay clean.
+
+Wire-up in `main.py`:
+
+    from fastapi import FastAPI, Request
+    from .request_context import set_request_id
+
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def _request_id_mw(request: Request, call_next):
+        set_request_id(request.headers.get("x-request-id"))
+        return await call_next(request)
+"""
+from __future__ import annotations
+
+from contextvars import ContextVar
+from uuid import uuid4
+
+_request_id: ContextVar[str] = ContextVar("request_id", default="")
+
+
+def set_request_id(value: str | None = None) -> str:
+    rid = (value or "").strip() or f"req_{uuid4().hex[:24]}"
+    _request_id.set(rid)
+    return rid
+
+
+def current_request_id() -> str:
+    rid = _request_id.get()
+    if not rid:
+        rid = set_request_id()
+    return rid

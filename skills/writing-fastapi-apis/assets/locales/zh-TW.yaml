@@ -1,0 +1,14 @@
+# Default Traditional Chinese strings for server-side rendering and
+# logs. The frontend owns the canonical user-facing copy; keep this
+# file in sync but treat the client translation table as authoritative
+# for anything visible to end users.
+
+errors.validation.failed: "輸入資料未通過驗證"
+errors.item.not_found: "找不到項目"
+errors.form.validation_failed: "提交資料未通過驗證"
+errors.form.stale: "表單已過期，請重新整理"
+errors.stream.aborted: "串流中斷，請重試"
+errors.stream.rate_limited: "請求過於頻繁，請稍候再試"
+errors.upstream.error: "上游服務發生錯誤"
+errors.upstream.unavailable: "上游服務無法連線"
+errors.internal.unexpected: "系統錯誤，請稍候再試"

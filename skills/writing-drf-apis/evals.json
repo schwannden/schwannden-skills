@@ -1,0 +1,58 @@
+{
+  "skill_name": "writing-drf-apis",
+  "evals": [
+    {
+      "id": "new-apiview-conventions",
+      "name": "New APIView follows DRF conventions",
+      "prompt": "Add a DRF endpoint to list and create the current user's projects. A user may own at most 10 projects. Follow our DRF conventions.",
+      "expected_output": "A view (APIView or generics.*) with explicit permission_classes, serializer validation via is_valid(raise_exception=True) or a generic view, status via rest_framework.status constants, and the 10-project limit enforced by raising ValidationError(code=...) in the serializer or perform_create — never a hand-built Response dict, never validation in the view body.",
+      "files": [
+        "skills/writing-drf-apis/SKILL.md",
+        "skills/writing-drf-apis/references/view-patterns.md",
+        "skills/writing-drf-apis/references/serializer-patterns.md"
+      ],
+      "assertions": [
+        { "check": "regex", "pattern": "permission_classes" },
+        { "check": "regex", "pattern": "raise_exception\\s*=\\s*True|perform_create|ValidationError" },
+        { "check": "regex", "pattern": "status\\.HTTP_" },
+        { "check": "regex_absent", "pattern": "status\\s*=\\s*(200|201|400|403|404|409|500)\\b" },
+        { "check": "regex_absent", "pattern": "acme-internal|widget-bot|secret-codename|@corp\\.example" }
+      ]
+    },
+    {
+      "id": "domain-error-with-code",
+      "name": "Domain error uses a custom APIException with an UPPER_SNAKE_CASE code",
+      "prompt": "We need to reject requests to cancel an order that has already shipped, with HTTP 409. Add the error following our conventions so the frontend can localize it.",
+      "expected_output": "A custom APIException subclass with status_code = 409 and default_code = 'ORDER_ALREADY_SHIPPED' (UPPER_SNAKE_CASE), raised rather than returned. Notes that the unified exception handler renders it as {\"error\": \"CODE\", \"detail\": \"...\"}.",
+      "files": [
+        "skills/writing-drf-apis/SKILL.md",
+        "skills/writing-drf-apis/references/error-handling-patterns.md",
+        "skills/writing-drf-apis/references/status-codes-reference.md"
+      ],
+      "assertions": [
+        { "check": "regex", "pattern": "APIException" },
+        { "check": "regex", "pattern": "default_code\\s*=\\s*['\"][A-Z_]+['\"]" },
+        { "check": "regex", "pattern": "409|HTTP_409_CONFLICT" },
+        { "check": "regex", "pattern": "\\braise\\b" },
+        { "check": "custom", "instruction": "Verify the error code is UPPER_SNAKE_CASE and the answer raises a custom APIException subclass rather than returning Response({...}, status=409) manually." }
+      ]
+    },
+    {
+      "id": "review-bypass-and-validation-in-view",
+      "name": "Review a view that bypasses the handler and validates in the view",
+      "prompt": "Review this against our conventions:\n\nclass SignupView(APIView):\n    def post(self, request):\n        if not request.data.get('email'):\n            return Response({\"detail\": \"email required\"}, status=400)\n        if User.objects.filter(email=request.data['email']).exists():\n            return Response({\"error\": \"taken\"}, status=400)\n        user = User.objects.create(email=request.data['email'])\n        return Response({\"id\": user.id})",
+      "expected_output": "Flags: (1) validation logic lives in the view instead of a serializer; (2) hand-built Response({...}, status=400) bypasses the unified exception handler and lacks an UPPER_SNAKE_CASE error code; (3) bare integer status instead of status.HTTP_* constants; (4) missing explicit permission_classes. Recommends moving validation into a serializer with is_valid(raise_exception=True) and raising ValidationError / a custom APIException with code= rather than returning dicts.",
+      "files": [
+        "skills/writing-drf-apis/SKILL.md",
+        "skills/writing-drf-apis/references/error-handling-patterns.md"
+      ],
+      "assertions": [
+        { "check": "regex", "pattern": "(?i)serializer" },
+        { "check": "regex", "pattern": "(?i)exception handler|raise_exception|ValidationError|APIException" },
+        { "check": "regex", "pattern": "(?i)status\\.HTTP_|status constant" },
+        { "check": "regex", "pattern": "(?i)permission" },
+        { "check": "custom", "instruction": "Verify the review flags BOTH the hand-built Response(...) envelope bypass (no error code, bare integer status) AND that validation belongs in a serializer, and recommends raising with an UPPER_SNAKE_CASE code." }
+      ]
+    }
+  ]
+}

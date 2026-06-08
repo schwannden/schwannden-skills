@@ -1,0 +1,10 @@
+schwannden-skill
+Copyright 2026 schwannden <schwannden@gmail.com>
+
+This product includes software developed by third parties, redistributed
+under their own licenses:
+
+- skills/writing-skills/
+  Vendored from https://github.com/obra/superpowers (skills/writing-skills)
+  Copyright (c) 2025 Jesse Vincent
+  Licensed under the MIT License. See skills/writing-skills/LICENSE.

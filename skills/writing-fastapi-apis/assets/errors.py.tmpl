@@ -1,0 +1,83 @@
+"""Centralised error model for your API.
+
+All raisable errors are `AppError`. Each carries a stable machine
+`code`, an HTTP status, and a `message_key` that the frontend
+translates. The server NEVER emits a localised message on the wire.
+
+When you add a new error, you must also:
+  1. Add an entry to `_HTTP_STATUS` below.
+  2. Add the matching `errors.<domain>.<condition>` key to BOTH
+     `locales/en.yaml` and `locales/zh-TW.yaml`.
+  3. Add a section to `references/error-catalog.md` in the skill.
+
+The codes below are illustrative examples — rename the domains
+(`ITEM`, `FORM`, `STREAM`, `UPSTREAM`) to match your project. Keep the
+hierarchical `DOMAIN.CONDITION` form and the four-place sync rule.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import Any
+
+
+class ErrorCode(StrEnum):
+    # Generic input validation (Pydantic, type errors)
+    VALIDATION_FAILED = "VALIDATION.FAILED"
+    # A domain resource lookup
+    ITEM_NOT_FOUND = "ITEM.NOT_FOUND"
+    # A form / submission flow
+    FORM_VALIDATION_FAILED = "FORM.VALIDATION_FAILED"
+    FORM_STALE = "FORM.STALE"
+    # Streaming (SSE) endpoints
+    STREAM_ABORTED = "STREAM.ABORTED"
+    STREAM_RATE_LIMITED = "STREAM.RATE_LIMITED"
+    # External dependencies
+    UPSTREAM_ERROR = "UPSTREAM.ERROR"
+    UPSTREAM_UNAVAILABLE = "UPSTREAM.UNAVAILABLE"
+    # Server
+    INTERNAL = "INTERNAL.UNEXPECTED"
+
+
+_HTTP_STATUS: dict[ErrorCode, int] = {
+    ErrorCode.VALIDATION_FAILED: 422,
+    ErrorCode.ITEM_NOT_FOUND: 404,
+    ErrorCode.FORM_VALIDATION_FAILED: 422,
+    ErrorCode.FORM_STALE: 410,
+    ErrorCode.STREAM_ABORTED: 499,
+    ErrorCode.STREAM_RATE_LIMITED: 429,
+    ErrorCode.UPSTREAM_ERROR: 502,
+    ErrorCode.UPSTREAM_UNAVAILABLE: 503,
+    ErrorCode.INTERNAL: 500,
+}
+
+
+@dataclass(slots=True)
+class AppError(Exception):
+    """The one error type endpoints raise. Anything else is a bug
+    that the unhandled-exception handler will mask as INTERNAL.
+
+    `params` is for non-PII context the frontend interpolates into
+    its translation: field names, resource types, counts, retry
+    seconds. NEVER raw user input, names, contact info, or any
+    field listed in references/pii-redaction.md.
+
+    `cause` is for `exc_info=` only — the handler logs it but never
+    serialises it to the wire.
+    """
+
+    code: ErrorCode
+    params: dict[str, Any] = field(default_factory=dict)
+    cause: BaseException | None = None
+
+    def __post_init__(self) -> None:
+        Exception.__init__(self, self.code.value)
+
+    @property
+    def http_status(self) -> int:
+        return _HTTP_STATUS[self.code]
+
+    @property
+    def message_key(self) -> str:
+        # ErrorCode("FORM.VALIDATION_FAILED") -> "errors.form.validation_failed"
+        return "errors." + self.code.value.lower()

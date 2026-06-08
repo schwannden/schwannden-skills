@@ -1,0 +1,60 @@
+{
+  "skill_name": "reviewing-code",
+  "evals": [
+    {
+      "id": 0,
+      "name": "silent-failure-swallowed-exception",
+      "prompt": "Review this diff. It's the only change in the PR. Tell me what needs to change before merge.\n\n```diff\n+def get_user_orders(user_id: str) -> list[Order]:\n+    try:\n+        rows = db.query(\"SELECT * FROM orders WHERE user_id = %s\", user_id)\n+        return [Order(**r) for r in rows]\n+    except Exception:\n+        return []\n```",
+      "expected_output": "The error-handling lens flags the broad `except Exception:` that swallows the failure and returns an empty list, so callers cannot distinguish 'this user has no orders' from 'the query failed'. It should be reported as a critical/must-fix silent failure: catch only the expected DB error (or let it propagate), log with context, and never return a fallback empty list that masks the error. May note no test pins the error path.",
+      "files": [],
+      "assertions": [
+        {"id": "flags_broad_catch", "description": "Flags the broad except Exception", "check": "regex", "pattern": "(?i)broad|except\\s+Exception|over-broad|too broad"},
+        {"id": "flags_swallow", "description": "Identifies the swallowed error / silent failure", "check": "regex", "pattern": "(?i)silent|swallow|mask|hide|suppress"},
+        {"id": "flags_empty_fallback", "description": "Flags the empty-list fallback ambiguity", "check": "regex", "pattern": "(?i)empty list|\\[\\]|no orders|distinguish|indistinguishable|cannot tell"},
+        {"id": "must_fix", "description": "Treats it as critical / must-fix", "check": "regex", "pattern": "(?i)critical|must.?fix|blocker|high"},
+        {"id": "suggests_fix", "description": "Gives a concrete fix (narrow catch / propagate / log)", "check": "regex", "pattern": "(?i)propagate|re-?raise|log|specific exception|narrow"},
+        {"id": "no_project_leak", "description": "No project-specific identifiers leak", "check": "regex_absent", "pattern": "(?i)acme-internal|widget-bot|secret-codename"}
+      ]
+    },
+    {
+      "id": 1,
+      "name": "new-logic-no-test-coverage",
+      "prompt": "Here is my change. Is it ready to merge?\n\n```diff\n+def apply_discount(price: float, code: str) -> float:\n+    if code == \"HALF\":\n+        return price * 0.5\n+    if code == \"FREE\":\n+        return 0.0\n+    if price < 0:\n+        raise ValueError(\"price must be non-negative\")\n+    return price\n```\n\nNo test files were changed in this PR.",
+      "expected_output": "The test-coverage lens flags that this new branching logic and the ValueError path have no tests. It should call out the gap as a critical/important coverage gap: tests are needed for each discount code branch, the negative-price ValueError, and the no-match passthrough. Should be specific about what each test verifies. May also note the negative-price check is unreachable for the HALF/FREE codes (a correctness observation).",
+      "files": [],
+      "assertions": [
+        {"id": "flags_missing_tests", "description": "Flags the absent test coverage", "check": "regex", "pattern": "(?i)no test|missing test|untested|test coverage|add tests|lacks test"},
+        {"id": "mentions_branches", "description": "Mentions covering the branches/edge cases", "check": "regex", "pattern": "(?i)branch|HALF|FREE|edge case|each (case|code)|ValueError|negative"},
+        {"id": "prioritizes", "description": "Rates or prioritizes the gap", "check": "regex", "pattern": "(?i)critical|important|gap|must|should"},
+        {"id": "specific_tests", "description": "Says what the tests should verify", "check": "custom"},
+        {"id": "no_project_leak", "description": "No project-specific identifiers leak", "check": "regex_absent", "pattern": "(?i)acme-internal|widget-bot|secret-codename"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "adversarial-no-false-alarm",
+      "prompt": "Review this diff for bugs.\n\n```diff\n+def safe_divide(a: int, b: int) -> float | None:\n+    if b == 0:\n+        logger.warning(\"division by zero for a=%s\", a)\n+        return None\n+    return a / b\n```",
+      "expected_output": "Adversarial verification and confidence filtering should prevent a false alarm. The code is correct: the zero divisor is guarded, logged with context, and returns an explicit None that the return type `float | None` documents — this is NOT a silent failure because the contract is explicit and the caller is forced by the type to handle None. The review should conclude the code looks fine (optionally a minor advisory at most), and must NOT report a fabricated bug or call the None return a silent failure.",
+      "files": [],
+      "assertions": [
+        {"id": "no_false_bug", "description": "Does not invent a critical bug", "check": "regex_absent", "pattern": "(?i)critical bug|serious bug|must.?fix|silent fail|swallow"},
+        {"id": "recognizes_ok", "description": "Concludes the code is correct / acceptable", "check": "regex", "pattern": "(?i)correct|looks good|no (issue|bug|problem)|acceptable|fine|well[- ]handled|explicit"},
+        {"id": "explicit_contract", "description": "Notes the None is explicit / typed / logged", "check": "regex", "pattern": "(?i)explicit|float\\s*\\|\\s*None|optional|logged|return type|guard"},
+        {"id": "no_project_leak", "description": "No project-specific identifiers leak", "check": "regex_absent", "pattern": "(?i)acme-internal|widget-bot|secret-codename"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "comment-lies-and-overdoc",
+      "prompt": "Review the comments in this diff.\n\n```diff\n+# Returns the user's age in years\n+def get_account_age_days(created_at: datetime) -> int:\n+    # increment the counter\n+    return (datetime.now() - created_at).days\n```",
+      "expected_output": "The comment-accuracy lens flags that the docstring/comment lies — it claims 'age in years' but the function returns days (and is named ...days). It should also flag '# increment the counter' as inaccurate and value-less (no counter is incremented). Recommend correcting or removing both. Advisory, not a code rewrite mandate.",
+      "files": [],
+      "assertions": [
+        {"id": "flags_inaccurate_comment", "description": "Flags the years-vs-days inaccuracy", "check": "regex", "pattern": "(?i)years|days|inaccurate|wrong|misleading|does not match|incorrect|contradict"},
+        {"id": "flags_valueless_comment", "description": "Flags the increment-the-counter noise comment", "check": "regex", "pattern": "(?i)increment|counter|restate|no value|remove|obvious|redundant"},
+        {"id": "suggests_fix_or_removal", "description": "Suggests correcting or removing", "check": "regex", "pattern": "(?i)remove|correct|fix|update|delete|rewrite"},
+        {"id": "no_project_leak", "description": "No project-specific identifiers leak", "check": "regex_absent", "pattern": "(?i)acme-internal|widget-bot|secret-codename"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "skill_name": "building-llm-agent-loops",
+  "evals": [
+    {
+      "id": "build-loop-from-scratch",
+      "name": "Build a correct thin agent loop from scratch",
+      "prompt": "I'm building a chat backend on the Anthropic Python SDK (AsyncAnthropic). I want the model to search and read pages from my own website (www.example.com) to answer questions, plus one custom tool that books an appointment. Write the tools definition and the agent loop. It needs to stream and keep prompt-caching working across turns.",
+      "expected_output": "A loop using messages.stream() as an async context manager, a module-level constant TOOLS array (web_search + web_fetch + one custom client tool) with allowed_domains pinned to example.com, a system block with cache_control ephemeral, and a stop_reason dispatch that handles end_turn / pause_turn / tool_use and caps iterations.",
+      "files": [],
+      "assertions": [
+        {"check": "regex", "pattern": "TOOLS\\s*[:=]"},
+        {"check": "regex", "pattern": "allowed_domains"},
+        {"check": "regex", "pattern": "example\\.com"},
+        {"check": "regex", "pattern": "cache_control"},
+        {"check": "regex", "pattern": "ephemeral"},
+        {"check": "regex", "pattern": "pause_turn"},
+        {"check": "regex", "pattern": "end_turn"},
+        {"check": "regex", "pattern": "tool_use"},
+        {"check": "regex", "pattern": "messages\\.stream"},
+        {"check": "regex_absent", "pattern": "(?i)acme-internal|widget-bot|secret-codename|internal_fn"},
+        {"check": "custom", "description": "TOOLS is presented as a stable module-level constant reused on every call, not rebuilt per turn; the iteration loop has a finite cap."}
+      ]
+    },
+    {
+      "id": "review-broken-loop",
+      "name": "Review a broken loop (mutating tools, no allowed_domains, no pause_turn)",
+      "prompt": "Review this agent loop for bugs and cost issues:\n\n```python\nasync def run_turn(client, history, user_text):\n    tools = [{\"type\": \"web_search_xxxxxxxx\", \"name\": \"web_search\", \"max_uses\": 5}]\n    if \"book\" in user_text:\n        tools.append({\"name\": \"book_appointment\", \"input_schema\": {}})\n    while True:\n        resp = await client.messages.create(\n            model=MODEL,\n            system=\"You are a helpful assistant for \" + user_text[:20],\n            tools=tools,\n            messages=history,\n        )\n        history.append(resp.to_message_param())\n        if resp.stop_reason == \"end_turn\":\n            break\n        if resp.stop_reason == \"tool_use\":\n            history.append(dispatch(resp))\n```",
+      "expected_output": "Review flags: tools[] is rebuilt and conditionally mutated per turn (breaks prompt cache); web_search has no allowed_domains (prompt-injection / open-web risk); system is a bare interpolated string (no cache_control, and per-turn content invalidates cache); pause_turn is not handled (turn can trail off); no iteration cap (runaway loop risk).",
+      "files": [],
+      "assertions": [
+        {"check": "regex", "pattern": "(?i)allowed_domains"},
+        {"check": "regex", "pattern": "(?i)pause_turn"},
+        {"check": "regex", "pattern": "(?i)cache"},
+        {"check": "regex", "pattern": "(?i)(constant|stable|module|per[- ]turn|rebuilt|mutat)"},
+        {"check": "regex", "pattern": "(?i)(cap|max.?iteration|runaway|infinite|loop budget)"},
+        {"check": "custom", "description": "Identifies all five: dynamic tools[], missing allowed_domains, missing/unstable cache_control on system, unhandled pause_turn, and uncapped loop."}
+      ]
+    },
+    {
+      "id": "server-vs-client-and-cache",
+      "name": "Conceptual: server tool vs client tool, why prompt cache is missing",
+      "prompt": "Two questions about my Anthropic SDK agent loop. (1) What is the difference between a server tool like web_search and my own client-side tool, and which stop_reason corresponds to each? (2) My input cost looks like it doubled and cache_read_input_tokens is 0 every turn even though turn 1 set cache_creation_input_tokens. Why might the prompt cache be missing?",
+      "expected_output": "Explains server tools (web_search/web_fetch) execute on Anthropic's side, appear as server_tool_use blocks, and do NOT make the loop iterate (a budget hit shows up as pause_turn); client tools cause stop_reason == tool_use and your code dispatches them. For the cache miss: the cached prefix (system + tools) is changing across turns — unstable TOOLS array, per-turn interpolation in the system prompt, missing cache_control, or model id changing.",
+      "files": [],
+      "assertions": [
+        {"check": "regex", "pattern": "(?i)server_tool_use"},
+        {"check": "regex", "pattern": "(?i)tool_use"},
+        {"check": "regex", "pattern": "(?i)pause_turn"},
+        {"check": "regex", "pattern": "(?i)(system|tools).*(stable|chang|identical|constant)|(stable|chang|identical|constant).*(system|tools)"},
+        {"check": "regex", "pattern": "(?i)cache_control"},
+        {"check": "custom", "description": "Correctly states server tools do not iterate the loop (only pause_turn re-enters), client tools yield stop_reason tool_use, and lists at least two real cache-miss causes (unstable tools array, per-turn system interpolation, missing cache_control, or model change)."}
+      ]
+    }
+  ]
+}

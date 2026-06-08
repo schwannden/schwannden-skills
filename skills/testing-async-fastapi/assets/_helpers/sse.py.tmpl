@@ -1,0 +1,100 @@
+"""SSE consumer for tests. USE THIS TEMPLATE: copy to tests/_helpers/sse.py.
+
+Hand-rolling SSE assertions in every test gets noisy fast: you have to
+buffer lines, parse `event:` and `data:` framing, decode JSON, and handle
+the stream-termination case. Centralise it here so individual tests stay
+readable.
+
+Wire format we consume:
+
+    event: token
+    data: {"text": "hello"}
+
+    event: end
+    data: {"reason": "stop"}
+
+    event: error
+    data: {"code":"CHAT.STREAM_ABORTED","message_key":"...","params":{}}
+
+The `event: error` case is **terminal**: once the server emits it, the
+connection closes. Tests that want to assert on it should expect `error` to
+be the last item in the parsed list.
+"""
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from typing import Any
+
+from httpx import Response
+
+
+@dataclass(frozen=True)
+class SSEEvent:
+    event: str
+    data: dict[str, Any]
+    raw: str  # the original `data:` line, in case the test needs to inspect framing
+
+
+async def read_sse_events(response: Response) -> list[SSEEvent]:
+    """Consume an SSE response into a flat list of events.
+
+    Usage:
+        async with client.stream("POST", "/chat", json={...}) as resp:
+            events = await read_sse_events(resp)
+
+    Returns events in the order received. Empty `data:` payloads parse to
+    `{}` so callers can index uniformly.
+    """
+    events: list[SSEEvent] = []
+    current_event = "message"  # default per the SSE spec
+    data_lines: list[str] = []
+
+    async for line in response.aiter_lines():
+        # Blank line = dispatch the event we've accumulated.
+        if line == "":
+            if data_lines:
+                raw = "\n".join(data_lines)
+                events.append(SSEEvent(event=current_event, data=_parse(raw), raw=raw))
+            current_event = "message"
+            data_lines = []
+            continue
+
+        if line.startswith(":"):
+            # Comment / keepalive; ignore.
+            continue
+        if line.startswith("event:"):
+            current_event = line[len("event:"):].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[len("data:"):].lstrip())
+        # Other fields (id:, retry:) are ignored — we don't use them.
+
+    # Flush any unterminated event (server closed without a trailing blank line).
+    if data_lines:
+        raw = "\n".join(data_lines)
+        events.append(SSEEvent(event=current_event, data=_parse(raw), raw=raw))
+
+    return events
+
+
+def _parse(raw: str) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # Fall back to a wrapped dict so tests can still introspect
+        # without raising — easier to debug than a hard failure here.
+        return {"_raw": raw}
+
+
+def assert_token_text(events: list[SSEEvent]) -> str:
+    """Concatenate all `token` events' text. Convenience helper for tests
+    that want the assembled message body."""
+    return "".join(e.data.get("text", "") for e in events if e.event == "token")
+
+
+def event_kinds(events: list[SSEEvent]) -> list[str]:
+    """Return just the event types in order. Useful for asserting on the
+    shape of the stream without caring about payloads."""
+    return [e.event for e in events]

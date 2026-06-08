@@ -1,0 +1,9 @@
+{
+  "name": "pr-review",
+  "description": "Comprehensive, multi-agent pull-request review. The /review-pr command inspects the diff, selects applicable specialist subagents (code quality, tests, docs, error handling, type design, simplification), runs them in parallel, and aggregates findings by severity.",
+  "version": "0.1.0",
+  "author": {
+    "name": "schwannden",
+    "email": "schwannden@gmail.com"
+  }
+}

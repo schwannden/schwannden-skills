@@ -1,0 +1,14 @@
+# Default English strings for server-side rendering and logs.
+# The frontend owns the canonical user-facing copy; keep this file in
+# sync but treat the client translation table as authoritative for
+# anything visible to end users.
+
+errors.validation.failed: "Input failed validation"
+errors.item.not_found: "Item not found"
+errors.form.validation_failed: "Submission failed validation"
+errors.form.stale: "Form has expired, please refresh"
+errors.stream.aborted: "Stream aborted, please retry"
+errors.stream.rate_limited: "Too many requests, please slow down"
+errors.upstream.error: "Upstream service returned an error"
+errors.upstream.unavailable: "Upstream service is unreachable"
+errors.internal.unexpected: "Unexpected server error"

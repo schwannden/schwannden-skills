@@ -1,0 +1,85 @@
+name: Deploy api to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "infra/api.Dockerfile"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+env:
+  PROJECT_ID:    ${{ vars.GCP_PROJECT_ID }}
+  REGION:        ${{ vars.GCP_REGION }}              # e.g. asia-east1
+  AR_REPO:       ${{ vars.ARTIFACT_REGISTRY_REPO }}  # e.g. your-repo
+  CLOUD_RUN_SVC: api
+  SQL_INSTANCE:  ${{ vars.CLOUD_SQL_INSTANCE }}      # e.g. your-prod-db
+  RUNTIME_SA:    ${{ vars.CLOUD_RUN_RUNTIME_SA }}    # service account the running container assumes
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for Workload Identity Federation
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure docker auth for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/api
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/api.Dockerfile
+          target: prod
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=api-prod
+          cache-to: type=gha,mode=max,scope=api-prod
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.CLOUD_RUN_SVC }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/api:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account ${{ env.RUNTIME_SA }} \
+            --add-cloudsql-instances ${{ env.PROJECT_ID }}:${{ env.REGION }}:${{ env.SQL_INSTANCE }} \
+            --set-secrets ANTHROPIC_API_KEY=anthropic-key:latest \
+            --set-env-vars "DATABASE_URL=postgres:///postgres?host=/cloudsql/${{ env.PROJECT_ID }}:${{ env.REGION }}:${{ env.SQL_INSTANCE }}" \
+            --cpu 1 --memory 512Mi \
+            --min-instances 0 --max-instances 10 \
+            --concurrency 40 \
+            --timeout 300 \
+            --port 8000 \
+            --quiet
+
+      - name: Smoke-test deployed endpoint
+        run: |
+          URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SVC }} --region ${{ env.REGION }} --format='value(status.url)')
+          echo "Service URL: $URL"
+          curl --fail --silent --show-error --max-time 10 "$URL/health"

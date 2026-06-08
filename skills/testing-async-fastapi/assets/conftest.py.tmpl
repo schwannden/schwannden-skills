@@ -1,0 +1,259 @@
+"""Root conftest for the API test tree. USE THIS TEMPLATE: copy to
+tests/conftest.py and adjust the application import paths to your layout.
+
+Fixture stack — all the test ergonomics live here so individual tests can
+stay short and uniform.
+
+Lifecycle (Django-equivalent):
+  session start → CREATE DATABASE app_test from your schema bootstrap SQL
+  every test    → BEGIN, run, ROLLBACK
+  session end   → DROP DATABASE  (skip if KEEPDB=1)
+
+Set KEEPDB=1 to keep the test DB between runs while iterating fast on one
+test. First run after schema changes still recreates it.
+"""
+from __future__ import annotations
+
+import os
+from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
+from typing import Any
+
+import asyncpg
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+
+# Imports from the application — adjust these import paths to your layout.
+from api.agent.deps import get_llm_client
+from api.deps import get_pool
+from api.main import app as fastapi_app
+
+from tests._helpers.fake_llm import FakeLLM
+
+# ---------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------
+
+# DATABASE_URL points at the dev DB (e.g. postgresql://app:app@localhost:5432/app).
+# We split the dbname off and connect to the `postgres` admin DB to issue
+# CREATE/DROP, then reconnect to the test DB for the actual tests.
+_DEV_DB_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://app:app@localhost:5432/app",
+)
+_TEST_DB_NAME = os.environ.get("TEST_DB_NAME", "app_test")
+_KEEPDB = os.environ.get("KEEPDB", "0") == "1"
+
+# Path to your schema bootstrap SQL. conftest.py here lives at
+# tests/conftest.py; adjust parents[...] for your repo layout, or override
+# with INIT_SQL_PATH=/abs/path/to/init.sql in the environment.
+_INIT_SQL_PATH = Path(
+    os.environ.get(
+        "INIT_SQL_PATH",
+        str(Path(__file__).resolve().parents[2] / "init.sql"),
+    )
+)
+
+
+def _admin_url() -> str:
+    """Same credentials/host as DATABASE_URL, but pointing at the
+    `postgres` admin database so we can issue CREATE/DROP."""
+    head, _, _tail = _DEV_DB_URL.rpartition("/")
+    return f"{head}/postgres"
+
+
+def _test_url() -> str:
+    head, _, _tail = _DEV_DB_URL.rpartition("/")
+    return f"{head}/{_TEST_DB_NAME}"
+
+
+# ---------------------------------------------------------------------
+# DB lifecycle (session-scoped)
+# ---------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def _ensure_test_database() -> AsyncIterator[None]:
+    """Create app_test from the schema SQL at session start.
+    Drop it at session end unless KEEPDB=1."""
+    admin = await asyncpg.connect(_admin_url())
+    try:
+        exists = await admin.fetchval(
+            "SELECT 1 FROM pg_database WHERE datname = $1", _TEST_DB_NAME
+        )
+        if exists and not _KEEPDB:
+            await _force_drop(admin, _TEST_DB_NAME)
+            exists = False
+        if not exists:
+            await admin.execute(f'CREATE DATABASE "{_TEST_DB_NAME}"')
+            await _apply_init_sql(_test_url(), _INIT_SQL_PATH)
+    finally:
+        await admin.close()
+
+    try:
+        yield
+    finally:
+        if not _KEEPDB:
+            admin = await asyncpg.connect(_admin_url())
+            try:
+                await _force_drop(admin, _TEST_DB_NAME)
+            finally:
+                await admin.close()
+
+
+async def _force_drop(admin: asyncpg.Connection, dbname: str) -> None:
+    """Drop a database, terminating other sessions first.
+    Postgres won't drop a DB while connections are open."""
+    await admin.execute(
+        """
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE datname = $1 AND pid <> pg_backend_pid()
+        """,
+        dbname,
+    )
+    await admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+
+
+async def _apply_init_sql(url: str, init_sql: Path) -> None:
+    sql = init_sql.read_text()
+    conn = await asyncpg.connect(url)
+    try:
+        await conn.execute(sql)
+    finally:
+        await conn.close()
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def db_pool(_ensure_test_database: None) -> AsyncIterator[asyncpg.Pool]:
+    """A small pool against the test DB. Shared across the session.
+
+    Tests don't acquire from this pool directly — they use db_conn,
+    which holds one connection inside a rolled-back transaction.
+    """
+    pool = await asyncpg.create_pool(_test_url(), min_size=1, max_size=2)
+    try:
+        yield pool
+    finally:
+        await pool.close()
+
+
+# ---------------------------------------------------------------------
+# Per-test transaction rollback
+# ---------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def db_conn(db_pool: asyncpg.Pool) -> AsyncIterator[asyncpg.Connection]:
+    """Acquire one connection, open a transaction, yield, then ROLLBACK.
+
+    Every test gets a clean slate without us touching tables. The same
+    connection is also handed to the FastAPI app via dependency override
+    (see `client`), so app-side reads see the test's setup writes.
+    """
+    async with db_pool.acquire() as conn:
+        tx = conn.transaction()
+        await tx.start()
+        try:
+            yield conn
+        finally:
+            await tx.rollback()
+
+
+# ---------------------------------------------------------------------
+# FastAPI app + AsyncClient
+# ---------------------------------------------------------------------
+
+
+class _SingleConnPool:
+    """Drop-in replacement for asyncpg.Pool that always yields the
+    same pinned connection. Supports both call styles the application
+    code might use: `async with pool.acquire() as conn:` and
+    `conn = await pool.acquire()`.
+    """
+
+    def __init__(self, conn: asyncpg.Connection) -> None:
+        self._conn = conn
+
+    def acquire(self) -> "_PinnedAcquire":
+        return _PinnedAcquire(self._conn)
+
+    async def release(self, conn: asyncpg.Connection) -> None:
+        # Pinned conn is owned by the test fixture; nothing to release.
+        return None
+
+
+class _PinnedAcquire:
+    """Both awaitable (yields the connection) and an async context
+    manager. Mirrors asyncpg's PoolAcquireContext."""
+
+    def __init__(self, conn: asyncpg.Connection) -> None:
+        self._conn = conn
+
+    def __await__(self):
+        async def _coro() -> asyncpg.Connection:
+            return self._conn
+        return _coro().__await__()
+
+    async def __aenter__(self) -> asyncpg.Connection:
+        return self._conn
+
+    async def __aexit__(self, *exc: Any) -> None:
+        return None
+
+
+@pytest.fixture
+def app(db_conn: asyncpg.Connection) -> Iterator[Any]:
+    """The FastAPI app instance with its DB pool dependency overridden
+    to yield the test's pinned connection."""
+    fastapi_app.dependency_overrides[get_pool] = lambda: _SingleConnPool(db_conn)
+    try:
+        yield fastapi_app
+    finally:
+        fastapi_app.dependency_overrides.pop(get_pool, None)
+
+
+@pytest.fixture
+def fake_llm(app: Any) -> Iterator[FakeLLM]:
+    """Replace the LLM client at the dependency boundary.
+
+    Tests call e.g. fake_llm.expect_text("hi") to program the next
+    response. See references/llm-mocking.md for patterns.
+    """
+    fake = FakeLLM()
+    app.dependency_overrides[get_llm_client] = lambda: fake
+    try:
+        yield fake
+    finally:
+        app.dependency_overrides.pop(get_llm_client, None)
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def client(app: Any, fake_llm: FakeLLM) -> AsyncIterator[AsyncClient]:
+    """An httpx AsyncClient bound to the app via ASGITransport.
+
+    Default fixture for integration & e2e tests. fake_llm is
+    auto-included so no test ever accidentally calls the real LLM.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+        yield c
+
+
+# ---------------------------------------------------------------------
+# Markers
+# ---------------------------------------------------------------------
+
+
+def pytest_collection_modifyitems(config: Any, items: list[Any]) -> None:
+    """Deselect live_llm tests by default. Re-enable with
+    `pytest -m live_llm`."""
+    if config.getoption("-m"):
+        return  # user passed an explicit -m, respect it
+    skip_live = pytest.mark.skip(
+        reason="live_llm deselected by default; pass `-m live_llm` to run"
+    )
+    for item in items:
+        if "live_llm" in item.keywords:
+            item.add_marker(skip_live)

@@ -1,0 +1,70 @@
+"""Example end-to-end test — full SSE flow with a faked LLM.
+USE THIS TEMPLATE: copy to tests/e2e/test_chat_basic.py.
+
+E2E tests live in tests/e2e/. They program FakeLLM with the turn(s) the test
+needs, hit /chat, and assert on the parsed SSE event stream.
+
+These are slow-ish (usually <1 s) and are the most likely place to hit
+fragile assumptions about timing or framing — that's why the SSE helper
+centralises the parsing.
+"""
+from __future__ import annotations
+
+import asyncpg
+from httpx import AsyncClient
+
+from tests._helpers.factories import make_note
+from tests._helpers.fake_llm import FakeLLM
+from tests._helpers.sse import assert_token_text, event_kinds, read_sse_events
+
+
+async def test_chat_streams_assistant_text(
+    client: AsyncClient,
+    fake_llm: FakeLLM,
+    db_conn: asyncpg.Connection,
+) -> None:
+    note_id = await make_note(db_conn)
+    fake_llm.expect_text("Hello there, friend.")
+
+    async with client.stream(
+        "POST",
+        "/chat",
+        json={"note_id": str(note_id), "message": "hi"},
+    ) as response:
+        assert response.status_code == 200
+        events = await read_sse_events(response)
+
+    kinds = event_kinds(events)
+    assert kinds[-1] == "end"
+    assert assert_token_text(events) == "Hello there, friend."
+
+
+async def test_chat_book_appointment_emits_form_required(
+    client: AsyncClient,
+    fake_llm: FakeLLM,
+    db_conn: asyncpg.Connection,
+) -> None:
+    note_id = await make_note(db_conn)
+    fake_llm.expect_tool_use(
+        "book_appointment",
+        input={
+            "start_time": "2026-07-01T10:00:00Z",
+            "note": "wants to schedule",
+        },
+        leading_text="Of course — ",
+    )
+
+    async with client.stream(
+        "POST",
+        "/chat",
+        json={
+            "note_id": str(note_id),
+            "message": "Can we schedule a time?",
+        },
+    ) as response:
+        events = await read_sse_events(response)
+
+    kinds = event_kinds(events)
+    assert "form_required" in kinds
+    form_event = next(e for e in events if e.event == "form_required")
+    assert form_event.data["prefill"]["start_time"] == "2026-07-01T10:00:00Z"

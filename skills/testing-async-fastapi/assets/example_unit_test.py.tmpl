@@ -1,0 +1,32 @@
+"""Example unit test — pure logic, no fixtures, runs in <1 ms.
+USE THIS TEMPLATE: copy to tests/unit/test_envelope.py.
+
+Unit tests live in tests/unit/. They never import the FastAPI app, never
+touch the DB, never speak to the LLM. They exist to lock behaviour of pure
+functions: validators, formatters, a redact() helper, the envelope builder.
+
+If a test needs anything I/O-shaped, it belongs in integration/, not here.
+"""
+from __future__ import annotations
+
+import json
+
+from api.request_context import set_request_id
+from api.responses import ok
+
+
+def test_ok_envelope_has_required_keys() -> None:
+    set_request_id("req_test_1")
+    payload = json.loads(ok({"hello": "world"}).body)
+
+    assert payload["success"] is True
+    assert payload["data"] == {"hello": "world"}
+    assert payload["error"] is None
+    assert payload["request_id"] == "req_test_1"
+
+
+def test_ok_envelope_does_not_leak_extra_keys() -> None:
+    # The frontend is built against a fixed shape — guard against drift.
+    set_request_id("req_test_2")
+    payload = json.loads(ok({"x": 1}).body)
+    assert set(payload.keys()) == {"success", "data", "error", "request_id"}
