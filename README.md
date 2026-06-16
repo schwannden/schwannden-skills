@@ -58,8 +58,8 @@ First register the marketplace, then install one or more themes:
 ```
 
 Available skill plugins: `personas`, `fastapi-backend`, `ai-engineering`, `operations`,
-`dev-workflow`, `authoring`, `engineering` (see the [catalog](#skill-catalog) for what's in
-each). Two additional **command/agent plugins** — `feature-dev` and `pr-review` — bundle slash
+`dev-workflow`, `authoring`, `engineering`, `web-quality` (see the [catalog](#skill-catalog)
+for what's in each). Two additional **command/agent plugins** — `feature-dev` and `pr-review` — bundle slash
 commands and subagents; see [Plugins (commands + agents)](#plugins-commands--agents).
 
 Plugin skills are namespaced by plugin name when invoked directly, e.g.
@@ -114,7 +114,7 @@ or external CLIs in their bodies; those are noted in the skill and degrade grace
 
 ## Skill catalog
 
-20 skills across 7 themes. Each theme maps to a Claude Code plugin (install line shown);
+22 skills across 8 themes. Each theme maps to a Claude Code plugin (install line shown);
 with the skills CLI, install any single skill with `--skill <name>`.
 
 ### 🎭 personas — `/plugin install personas@schwannden-skills`
@@ -169,6 +169,13 @@ confirmation gates exactly, since those rely on Claude-Code-only tooling).
 | [`system-design`](./skills/system-design) | Vendor-neutral design partner for distributed systems — four modes (Review, Rubber-duck, Autopilot, Interview), a nine-dimension rubric with an L5/L6 interview scorecard, and a 15-design reference library spanning the canonical archetypes; reasons in fundamentals over branded products | Original |
 | [`developing-features`](./skills/developing-features) | Building a non-trivial feature end-to-end — a multi-phase loop (explore → clarify → architect → implement → review) with parallel read-only subagents and structured decision gates; skips itself for typo/one-line/hotfix changes | Original |
 | [`reviewing-code`](./skills/reviewing-code) | Reviewing a diff across six lenses (logic bugs, silent failures, test coverage, type design, comment accuracy, simplification) with confidence filtering and adversarial verification so only high-signal findings surface | Original |
+
+### 🌐 web-quality — `/plugin install web-quality@schwannden-skills`
+
+| Skill | Description | Notes |
+|-------|-------------|-------|
+| [`auditing-website-quality`](./skills/auditing-website-quality) | Audit a live site across mobile-friendliness, accessibility (WCAG 2.2 AA), PWA-installability, and SEO/Core Web Vitals — a curl-based static pass (manifest, meta, Open Graph, JSON-LD, robots/sitemap, headers, headings) plus per-dimension checklists with concrete thresholds and the lab/manual tools (Lighthouse, PageSpeed Insights field data, axe, DevTools Application, PWABuilder) the static pass can't replace. Dispatches one read-only agent per dimension and picks up `optimizing-for-ai-search` as an optional fifth (GEO) dimension when present | Original |
+| [`optimizing-for-ai-search`](./skills/optimizing-for-ai-search) | Audit a site for GEO/AEO (Generative/Answer Engine Optimization) and fix what stops AI assistants and answer engines (ChatGPT, Perplexity, AI Overviews, Gemini, Copilot) from crawling, rendering, and citing it — a curl-based audit script plus prioritized fixes (SSR, AI-crawler robots.txt, citable content, structured data) and honest hype-vs-reality guidance | Original |
 
 ### ✍️ authoring — `/plugin install authoring@schwannden-skills`
 

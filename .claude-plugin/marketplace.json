@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "schwannden's personal collection of shareable agent skills.",
-    "version": "0.8.0"
+    "version": "0.10.0"
   },
   "plugins": [
     {
@@ -97,6 +97,18 @@
         "./skills/system-design",
         "./skills/developing-features",
         "./skills/reviewing-code"
+      ]
+    },
+    {
+      "name": "web-quality",
+      "description": "Audit a live website across five dimensions — mobile-friendliness, accessibility (WCAG 2.2 AA), PWA-installability, SEO/Core Web Vitals, and GEO/AEO (getting crawled, rendered, and cited by AI answer engines) — with curl-based static passes plus per-dimension checklists and the lab/manual tools the static passes can't replace.",
+      "source": "./",
+      "strict": false,
+      "category": "web",
+      "tags": ["web", "accessibility", "wcag", "pwa", "seo", "core-web-vitals", "mobile", "performance", "geo", "aeo", "ai-search", "audit"],
+      "skills": [
+        "./skills/auditing-website-quality",
+        "./skills/optimizing-for-ai-search"
       ]
     },
     {
