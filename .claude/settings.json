@@ -1,0 +1,14 @@
+{
+  "enabledPlugins": {
+    "personas@schwannden-skills": true,
+    "fastapi-backend@schwannden-skills": true,
+    "ai-engineering@schwannden-skills": true,
+    "operations@schwannden-skills": true,
+    "dev-workflow@schwannden-skills": true,
+    "authoring@schwannden-skills": true,
+    "engineering@schwannden-skills": true,
+    "web-quality@schwannden-skills": true,
+    "feature-dev@schwannden-skills": true,
+    "pr-review@schwannden-skills": true
+  }
+}
