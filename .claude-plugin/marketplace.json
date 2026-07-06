@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "schwannden's personal collection of shareable agent skills.",
-    "version": "0.10.0"
+    "version": "0.12.0"
   },
   "plugins": [
     {
@@ -97,6 +97,23 @@
         "./skills/system-design",
         "./skills/developing-features",
         "./skills/reviewing-code"
+      ]
+    },
+    {
+      "name": "brand-marketing",
+      "description": "Brand and marketing craft for any organization: building a brand kit (fact sheet, voice card, media-coverage log, AI-flavor filter), auditing copy against it, writing ESG/sponsorship proposals, reporting on marketing performance, repurposing press coverage, packaging content for SEO, and writing short-form video scripts.",
+      "source": "./",
+      "strict": false,
+      "category": "marketing",
+      "tags": ["marketing", "brand", "content", "seo", "esg", "video-scripts", "b2b"],
+      "skills": [
+        "./skills/building-brand-kits",
+        "./skills/auditing-brand-voice",
+        "./skills/writing-esg-sponsorship-proposals",
+        "./skills/reporting-marketing-performance",
+        "./skills/repurposing-press-coverage",
+        "./skills/packaging-content-for-seo",
+        "./skills/writing-short-form-video-scripts"
       ]
     },
     {

@@ -42,7 +42,8 @@ schwannden-skill/
 ├── skills/
 │   └── <skill-name>/
 │       ├── SKILL.md                  # REQUIRED: frontmatter + instructions
-│       ├── references/               # optional, loaded on demand
+│       ├── references/               # optional prose the agent READS on demand
+│       ├── assets/                   # optional blank templates the USER fills in
 │       ├── scripts/                  # optional executable helpers
 │       └── LICENSE + VENDORED.md     # ONLY for vendored (third-party) skills
 ├── plugins/                          # command/agent plugins (Claude Code only, NOT skills)
@@ -75,6 +76,11 @@ schwannden-skill/
   hyphens. Prefer **gerund form** (`writing-skills`, `processing-pdfs`).
 - Reference files live **one level deep** from `SKILL.md` (agents only partially
   read deeply nested chains).
+- Two flavors of one-level-deep helper file, by intended reader: `references/`
+  holds **prose the agent reads** to inform its work (checklists, framework
+  tables); `assets/` holds **blank copy-and-adapt templates the user fills in**
+  for their own project. Both obey the "reference files over 100 lines start
+  with a table of contents" rule.
 - The "flat `skills/`, no per-plugin subfolders" rule below applies to **skills
   only** — it exists to keep the `npx skills` flow working. Command/agent plugins
   are not skills and DO live in their own `plugins/<name>/` subfolders.

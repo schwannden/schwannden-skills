@@ -58,7 +58,7 @@ First register the marketplace, then install one or more themes:
 ```
 
 Available skill plugins: `personas`, `fastapi-backend`, `ai-engineering`, `operations`,
-`dev-workflow`, `authoring`, `engineering`, `web-quality` (see the [catalog](#skill-catalog)
+`dev-workflow`, `authoring`, `engineering`, `web-quality`, `brand-marketing` (see the [catalog](#skill-catalog)
 for what's in each). Two additional **command/agent plugins** — `feature-dev` and `pr-review` — bundle slash
 commands and subagents; see [Plugins (commands + agents)](#plugins-commands--agents).
 
@@ -114,7 +114,7 @@ or external CLIs in their bodies; those are noted in the skill and degrade grace
 
 ## Skill catalog
 
-22 skills across 8 themes. Each theme maps to a Claude Code plugin (install line shown);
+29 skills across 9 themes. Each theme maps to a Claude Code plugin (install line shown);
 with the skills CLI, install any single skill with `--skill <name>`.
 
 ### 🎭 personas — `/plugin install personas@schwannden-skills`
@@ -183,6 +183,18 @@ confirmation gates exactly, since those rely on Claude-Code-only tooling).
 |-------|-------------|-------|
 | [`writing-skills`](./skills/writing-skills) | Creating, editing, or verifying skills before deployment — test-driven process documentation | Vendored from [obra/superpowers](https://github.com/obra/superpowers), MIT |
 | [`agents-md`](./skills/agents-md) | Creating, improving, or reviewing an `AGENTS.md` file — templates, section guidance, and anti-patterns for the open agent-instructions standard | Original |
+
+### 📣 brand-marketing — `/plugin install brand-marketing@schwannden-skills`
+
+| Skill | Description | Notes |
+|-------|-------------|-------|
+| [`building-brand-kits`](./skills/building-brand-kits) | Scaffolds a brand kit — fact sheet, voice card with a register matrix, media-coverage inventory, and an AI-flavor filter — as blank templates for any organization | Original |
+| [`auditing-brand-voice`](./skills/auditing-brand-voice) | Editorial QA gate against a documented brand voice — brand-voice fit, register fit, author-voice consistency, AI-flavor pass — flags with citations, never silently rewrites | Original |
+| [`writing-esg-sponsorship-proposals`](./skills/writing-esg-sponsorship-proposals) | B2B sponsorship/ESG proposal briefs — buyer-role mapping, persona-tailored SDG angle, case-study matching, a 70%-drafted outline, buyer-role-tagged objection responses | Original |
+| [`reporting-marketing-performance`](./skills/reporting-marketing-performance) | Recurring marketing-performance reports — KPI-vs-last-period table, hypothesis-framed diagnosis, mandatory instrumentation-fix recommendation | Original |
+| [`repurposing-press-coverage`](./skills/repurposing-press-coverage) | Turns one press clip into an SEO blog recap, platform-native social captions, and an ESG/CSR snippet, then logs it so the archive compounds | Original |
+| [`packaging-content-for-seo`](./skills/packaging-content-for-seo) | On-page SEO packaging — title, meta description, heading map, internal links, author-bio block — structure/distribution only, CMS-agnostic | Original |
+| [`writing-short-form-video-scripts`](./skills/writing-short-form-video-scripts) | Short-form video scripts — hook lines, shot list, payoff, CTA — with a mandatory, non-negotiable consent/anonymization flag on every output | Original |
 
 ## Plugins (commands + agents)
 
