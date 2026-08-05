@@ -14,23 +14,45 @@ You are helping a developer implement a new feature. Follow a systematic approac
 - **Understand before acting**: Read and comprehend existing code patterns first.
 - **Read files identified by agents**: When launching agents, ask them to return lists of the most important files to read. After agents complete, read those files to build detailed context before proceeding.
 - **Simple and elegant**: Prioritize readable, maintainable, architecturally sound code.
-- **Track every phase as a task**: At Phase 1, create one task per phase via `TaskCreate`. Whenever you enter a phase, immediately `TaskUpdate` it to `in_progress`. Whenever you finish a phase (before presenting the next gate, or before moving to the next phase if there is no gate), `TaskUpdate` it to `completed`. Never leave a finished phase as `pending`.
+- **Track every phase as a task (if task-tracking tools are available)**: At Phase 1, create one task per phase via `TaskCreate`. Whenever you enter a phase, immediately mark it `in_progress` (`TaskUpdate`). Whenever you finish a phase (before presenting the next gate, or before moving to the next phase if there is no gate), mark it `completed` (`TaskUpdate`). Never leave a finished phase as `pending`. If your host has no task-tracking tools, skip the tool calls and track phase progress in your prose summaries instead — the gates and phases below do not depend on the task list.
 - **Reuse domain skills**: During design and implementation, prefer invoking any installed domain skill whose `description` matches the topic (e.g. a framework or API skill) over re-deriving patterns from raw codebase greps. Let the available skills catalog be the source of truth — do not hard-code a skill list.
 
-## Checkpoint Gate Protocol
+## Checkpoint Gate Protocol (host-agnostic)
 
-This workflow has **3 checkpoint gates**, all *before* implementation begins. After Gate 3, implementation, tests, and the quality review run automatically without further approval gates. At each gate you MUST stop, summarize where you are, and present the gate as an `AskUserQuestion` tool call. Never pose a gate in plain prose — always use the tool so the user gets explicit multiple-choice options.
+This workflow has **3 checkpoint gates**, all *before* implementation begins. After Gate 3, implementation, tests, and the quality review run automatically without further approval gates. At each gate you MUST stop, summarize where you are, and present the gate as a multiple-choice question with 2–4 options. Do not proceed until the user has answered — never select an option on the user's behalf.
 
-Standard gate options:
+How to present the gate — use the FIRST method that applies in your current environment. Only call a tool that is actually in your tool list; never invent a tool name.
+
+1. **If a structured ask-the-user tool is available**, call it with the gate question and options, matching that host's schema exactly. Known names:
+   - Claude Code / Agent SDK → `AskUserQuestion`
+   - Codex CLI → `request_user_input`
+   - Cline / Roo Code → `ask_followup_question`
+   Put the recommended option first and suffix its label with `(Recommended)`.
+   - `AskUserQuestion`: `header` ≤ 12 characters; it auto-offers "Other" — do not add it yourself. You may batch up to 4 questions in one call.
+   - `request_user_input`: `header` ≤ 12 characters; 2–3 options; the client appends "Other".
+   - `ask_followup_question`: pass 2–5 option strings.
+   Use a `preview` field only if your host's tool supports one (`AskUserQuestion` does; the others do not).
+
+2. **Otherwise** (no structured-question tool — e.g. Cursor, Windsurf, Aider, Continue, Copilot coding agent), render the gate as plain text and STOP:
+   - Fixed header line: `✋ CHECKPOINT [N/3] — <phase name>`
+   - A 3–8 line summary of what was just produced and what the next phase will do.
+   - The question, then a numbered list:
+     ```
+     1) Proceed (Recommended) — ...
+     2) Modify — ...
+     3) Cancel — ...
+     ```
+   - Include an explicit "Other / none of these" path for free-form input.
+   - End your turn immediately and take no further action until the user replies. In non-blocking-ask hosts (e.g. Cursor's "Ask questions" feature), explicitly ending the turn is what makes the gate block — do NOT use the host's non-blocking clarifying-question feature for a gate.
+
+Standard gate options (map to your host's option format):
 - **Proceed** — advance to the next phase.
 - **Modify** — user provides feedback; re-run the current phase with their input appended.
 - **Cancel** — halt cleanly, summarize completed work, and exit the workflow.
 
-Some gates add a context-specific fourth option (noted inline). The `AskUserQuestion` tool automatically offers "Other" for free-form input — do not add it yourself. Put the recommended option first and suffix its label with `(Recommended)`. Keep the `header` field ≤ 12 characters.
+Some gates add a context-specific fourth option (noted inline). Always allow free-form input (the "Other" path) so the user can answer outside the listed options.
 
-Each gate prints a fixed header line: `✋ CHECKPOINT [N/3] — <phase name>` followed by a 3–8 line summary of what was just produced and what the next phase will do. The `AskUserQuestion` call immediately follows the summary. Do not proceed until the user has answered.
-
-**Status discipline at every gate**: before the summary, `TaskUpdate` the phase you just finished to `completed`. After the user selects `Proceed`, `TaskUpdate` the next phase to `in_progress` before doing any work in it. This keeps the task list a faithful record of progress.
+**Status discipline at every gate**: before the summary, mark the phase you just finished `completed` (`TaskUpdate` if task-tracking tools are available). After the user selects `Proceed`, mark the next phase `in_progress` before doing any work in it. This keeps the task list a faithful record of progress where one exists.
 
 ---
 
@@ -41,19 +63,19 @@ Each gate prints a fixed header line: `✋ CHECKPOINT [N/3] — <phase name>` fo
 Initial request: $ARGUMENTS
 
 **Actions**:
-1. Create one task per phase via `TaskCreate`, then immediately `TaskUpdate` Phase 1 to `in_progress`.
+1. Create one task per phase via `TaskCreate` (if task-tracking tools are available), then immediately mark Phase 1 `in_progress` (`TaskUpdate`).
 2. If the feature is unclear, ask the user for:
    - What problem are they solving?
    - What should the feature do?
    - Any constraints or requirements?
 3. Summarize understanding and confirm with the user.
-4. `TaskUpdate` Phase 1 to `completed` right before presenting CHECKPOINT [1/3].
+4. Mark Phase 1 `completed` (`TaskUpdate`) right before presenting CHECKPOINT [1/3].
 
 ---
 
 ### ✋ CHECKPOINT [1/3] — Ready to explore the codebase?
 
-Summarize the feature intent in 3–5 bullets. Then call `AskUserQuestion`:
+Summarize the feature intent in 3–5 bullets. Then present this gate per the Checkpoint Gate Protocol above:
 
 - **question**: "Ready to launch `code-explorer` agents to map the relevant parts of the codebase?"
 - **header**: "Explore?"
@@ -94,16 +116,16 @@ Summarize the feature intent in 3–5 bullets. Then call `AskUserQuestion`:
 **Actions**:
 1. Review the codebase findings and original feature request.
 2. Identify underspecified aspects: edge cases, error handling, integration points, scope boundaries, design preferences, backward compatibility, performance needs.
-3. **Present questions to the user.** When a question has a small discrete set of answers (≤ 4 options), ask it via `AskUserQuestion` — you may batch up to 4 questions in a single tool call. For open-ended questions that need free-form text, a plain prose list is fine.
+3. **Present questions to the user.** When a question has a small discrete set of answers (≤ 4 options), present it per the Checkpoint Gate Protocol (use a structured ask-the-user tool if available — `AskUserQuestion` batches up to 4 questions per call, `request_user_input` up to 3 — otherwise a numbered prose list). For open-ended questions that need free-form text, a plain prose list is fine.
 4. **Wait for answers before proceeding to architecture design.**
 
-If the user says "whatever you think is best", provide your recommendation and get explicit confirmation (also via `AskUserQuestion` when options are enumerable).
+If the user says "whatever you think is best", provide your recommendation and get explicit confirmation (via a structured ask-the-user tool when options are enumerable and such a tool is available, otherwise in prose).
 
 ---
 
 ### ✋ CHECKPOINT [2/3] — Ready to design architectures?
 
-Summarize the answered clarifying questions and remaining open items (if any). Then call `AskUserQuestion`:
+Summarize the answered clarifying questions and remaining open items (if any). Then present this gate per the Checkpoint Gate Protocol above:
 
 - **question**: "Clarifications captured. Ready to launch `code-architect` agents to design 2–3 candidate architectures?"
 - **header**: "Design?"
@@ -127,7 +149,7 @@ Summarize the answered clarifying questions and remaining open items (if any). T
    Gate 3 approves the whole plan; there are no later gates to re-approve docs or tests separately.
 3. Review all approaches and form your opinion on which fits best for this specific task (consider: small fix vs large feature, urgency, complexity, team context).
 4. Present to the user: a brief summary of each approach (all three change categories), a trade-offs comparison, **your recommendation with reasoning**, and concrete implementation differences.
-5. **Ask the user which approach they prefer via `AskUserQuestion`.** Each candidate architecture is one option; put the recommended one first with the `(Recommended)` suffix. Use the `preview` field when a short code/diagram snippet helps the user compare options side-by-side.
+5. **Ask the user which approach they prefer**, per the Checkpoint Gate Protocol. Each candidate architecture is one option; put the recommended one first with the `(Recommended)` suffix. Use a `preview` field when a short code/diagram snippet helps the user compare options side-by-side — but only if your host's ask-the-user tool supports previews (`AskUserQuestion` does; `request_user_input` and `ask_followup_question` do not). On hosts without a structured tool, render each candidate with its snippet inline in prose.
 
 ---
 
@@ -135,7 +157,7 @@ Summarize the answered clarifying questions and remaining open items (if any). T
 
 This is the **final gate** before autonomous execution. After `Proceed`, Phase 5 (implementation: source code + docs + tests) and Phase 6 (quality review) run without further gates — so the approved plan must fully cover source-code, documentation, and test changes.
 
-After the user has picked an architecture, call `AskUserQuestion`:
+After the user has picked an architecture, present this gate per the Checkpoint Gate Protocol above:
 
 - **question**: "Architecture `[name]` selected. Proceed with implementation (source + docs + tests) and automated code review exactly to this plan?"
 - **header**: "Implement?"
@@ -170,7 +192,7 @@ After the user has picked an architecture, call `AskUserQuestion`:
 
 1. If the companion **`pr-review`** plugin is installed, invoke its `/review-pr all parallel` command automatically once Phase 5 completes — no gate precedes this. `/review-pr` handles applicable-agent selection, parallel launch, structured aggregation (Critical / Important / Suggestions / Strengths), and a recommended action plan. If `pr-review` is not available, do a focused inline review of the diff for correctness, security, tests, and clarity instead.
 
-2. Relay the review summary back to the user, then call `AskUserQuestion` to decide next steps:
+2. Relay the review summary back to the user, then present a gate per the Checkpoint Gate Protocol to decide next steps:
 
    - **question**: "How do you want to proceed on the review findings?"
    - **header**: "Findings?"
